@@ -1,3 +1,18 @@
+-- EVO-25798 Update Remaining Amount Based on Check History
+--
+-- SQL Description: This SQL is used to set the remaining amount and state of invoices to 
+-- paid / partially paid / not paid depending on the sum of their check history
+-- How to Use: Copy the SQL statement, paste it in phoenix, and click run, no modification is neccesary.
+-- Jira Key/CR Number: EVO-25798 | https://lightspeeddms.atlassian.net/jira/software/c/projects/EVO/issues/EVO-25798
+-- SQL Statement:
+
+/* This SQL selects everything from apcheckinvoicelist so we can calculate the total "amount paid this check" for
+each invoice, where the check is not voided. This allows us to set the remaining amount to an amount equal to the
+amounts paid on the checks, where they may be overpayments or items marked as paid when they shouldn't be.
+It uses INNER JOINS on apvendor, and glsltransaction. The apvendor join is used to join on vendor information, which
+allows us filter by vendor number. The join on glsltransaction is used to join on the invoice information itself,
+which allows us to calculate remaining amount based on how much the invoic was created for, minus how much was paid.*/
+
 -- Diagnostic // Change vendor number on line 40 to vendor with issue
 SELECT /* Remaining Amount*/ ROUND((sl.remainingamt * .0001), 2) AS remaining,
 	--
