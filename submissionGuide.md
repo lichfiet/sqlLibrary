@@ -1,5 +1,5 @@
 ## How to Add a new SQL
-### **Important:** All SQL submissions must follow a format. To see the formatting guide, please look at the [**formatAndStylingGuide**](https://github.com/lichfiet/sqlLibrary/blob/main/formatAndStylingGuide) 
+### **Important:** All SQL submissions must follow a format. To see the formatting guide, please look at the [**formatAndStylingGuide**](https://github.com/lichfiet/sqlLibrary/blob/main/formatAndStylingGuide.md) 
 This guide walks you through the process to submit new SQLs and offers recommendations for filling out the required information when requesting a new sql to be added. Although it may sounds redundant, please include all comments and documentation you can on your SQLs, even if you're explaining joins or what a filter does (ie. `-- filters where item IS null` on a where clause.)
 
 ### 1. Create a New File
