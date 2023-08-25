@@ -1,6 +1,6 @@
 # Trevor's SQL Library
 
-Hi all, this is the library of SQLs, if you have some diagnostic SQLs or Update SQLs to submit, feel free to make a new branch and I'll add it.
+Hi all, this is the library of SQLs, if you have some diagnostic SQLs or Update SQLs to submit, feel free to make a new branch and I'll add it. If you would like to add a SQL, please follow the link below to be directed to the guide.
 
 #### Quick Links and Guides
 ##### [Guide: How to Add A SQL](https://github.com/lichfiet/sqlLibrary/blob/main/submissionGuide.md)
