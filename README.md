@@ -5,7 +5,7 @@ Hi all, this is the library of SQLs, if you have some diagnostic SQLs or Update 
 #### Quick Links and Guides
 ##### [Guide: How to Add A SQL](https://github.com/lichfiet/sqlLibrary/blob/main/submissionGuide.md)
 ##### [Guide: How to Edit A Previously Submitted SQL]()
-##### [Submission/Formatting Guidelines]()
+##### [Submission/Formatting Guidelines](https://github.com/lichfiet/sqlLibrary/blob/main/formatAndStylingGuide)
 ##### [Guide: How to Navigate]()
 ## Organization 
 
