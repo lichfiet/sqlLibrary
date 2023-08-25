@@ -111,4 +111,51 @@ This guide lists the **requirements** for new SQL submissions and modifications.
 
 ## **Modifications**
 
+If you aim to append a pre-existing SQL, please make a new branch and make your changes. For a guide on how to do that, please read our guide on [appending previously submitted sqls]()
 
+### **Required Items for Approval**
+
+- **Changelog**:
+  if you are making changes to a previously submitted SQL, you must leave a note with formatting like this
+
+  ```sql
+  -- Changelog:
+  /* Modified By Trevor L 8/25/2023: Removed nested query and turned it into a left join to speed up the SQL run time. */
+  ```
+
+  if you dont see any of the required items listed in the submission portion of this document, on the SQL you are modifying, please add them.
+
+- **Comments Hightlighting Your Changes**
+
+  example:
+  ```LEFT JOIN table1 tab1 ON tab1.id = tab2.id -- Modified by Trevor L 8/25/2023```
+
+  If adding the comments makes the statement look busy or undermines / replaces previous comments used to explain, you can exclude them from your
+  submission however it is strongly encouraged.
+
+<br>
+
+## **Completed SQL Statement**
+
+  ```sql
+  -- EVO-12345 Select Statement to Identify Part Invoice
+  --
+  -- SQL Description: This SQL is used to find the Payroll Plus Client ID of all stores in a database
+  -- How to Use: Copy the SQL statement, paste it in phoenix, and click run, no modification is neccesary.
+  -- Jira Key/CR Number: EVO-12345 | https://lightspeeddms.atlassian.net/jira/software/c/projects/EVO/issues/EVO-12345
+  -- SQL Statement:
+
+  /* This SQL uses two joins on cocategory. One of these is an INNER JOIN on the parts categoryid,
+  to grab the relevant sales category information. The other join, is a LEFT JOIN used to find a
+  replacement sales category. */
+
+  SELECT pil.partinvoicelineid AS partinvline, pil.partinvoiceid AS partinvid -- Adds an aliias to the column
+  FROM papartinvoice pi -- part invoice table
+  LEFT JOIN papartinvoiceline pil ON pil.partinvoiceid = pi.partinvoiceid -- join to include part invoice line information where it's relevant
+  WHERE pi.partinvoicenumber IN (123, 456, 789) -- filter for 3 specific part invoice numbers
+
+  -- Changelog:
+  /* Modified by John Doe 8/25/23: added comments at the end of clauses for documentation */
+  ```
+
+### *If you ever have any questions about formatting please pm me @Trevor Lichfield on slack* ###
