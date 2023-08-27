@@ -13,3 +13,5 @@ Hi all, this is the library of SQLs, if you have some diagnostic SQLs or Update 
 All items in the repository are sorted into folders. Inside the folders most of the diagnostics and updates are sorted by modules *(Accounting breaks off into Payables, Receivables, General Ledger, Etc.)* Inside each folder main folder, will be an updates and diagnostics folder. To find SQL statements for diagnosis, please view the diagnostics folder inside the respective module.
 
 ###### Authored by Trevor L.
+
+test
