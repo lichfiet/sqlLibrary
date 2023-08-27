@@ -1,8 +1,9 @@
 -- EVO-25798 Update Remaining Amount Based on Check History
 --
--- SQL Description: This SQL is used to set the remaining amount and state of invoices to 
--- paid / partially paid / not paid depending on the sum of their check history
--- How to Use: Copy the SQL statement, paste it in phoenix, and click run, no modification is neccesary.
+-- SQL Description: This SQL is used to set the remaining amount and state of invoices to
+-- paid / partially paid / not paid depending on the sum of their check history. Includes Diagnostic.
+-- How to Use: Copy the SQL statement, paste it in phoenix, and replace the xxxxx with vendor number.
+-- the first half is a diagnostic. Instructions are the same for the update.
 -- Jira Key/CR Number: EVO-25798 | https://lightspeeddms.atlassian.net/jira/software/c/projects/EVO/issues/EVO-25798
 -- SQL Statement:
 
@@ -52,7 +53,7 @@ INNER JOIN glsltransaction sl ON il.apinvoiceid = sl.sltrxid
 INNER JOIN apvendor v ON v.vendorid = sl.acctid
 LEFT JOIN apcheckheader ch ON ch.apcheckheaderid = il.apcheckheaderid
 WHERE sltrxstate NOT IN (9)
-	AND v.vendornumber = 14695 -- Change to Vendor Number
+	AND v.vendornumber = xxxxx -- Change to Vendor Number
 	AND ch.voidedflag = 0 -- Makes sure we don't included voided checks in the paid so far sum
 GROUP BY apinvoiceid,
 	sl.documentnumber,
@@ -111,7 +112,7 @@ WHERE sl.sltrxid = bob.id;
 
 
 
--- This SQL is a drop-in replacement for output 2 on EVO-25798 when it doesn't run on larger dealerships, let in here for ease of access
+-- This SQL is a drop-in replacement for output 2 on EVO-25798 when it doesn't run on larger dealerships, left in here for ease of access
 
 --OP2
 -- Resets state+remainingamt back for invoices paid w/o check V.2
