@@ -11,19 +11,23 @@
 -- trevor's
 
 UPDATE papartinvoiceline pil
-SET adjustmentprice = adjustmentprice + bob.oob_amount
+SET adjustmentprice = pil.adjustmentprice + bob.oob_amount
 FROM (
 	SELECT partinvoicelineid,
 		sum(debitamt) AS debits,
 		sum(creditamt) AS credits,
-		(sum(debitamt) - sum(creditamt)) AS OOB_Amount
-	FROM papartinvoiceline pil
-	INNER JOIN mabusinessaction ba ON ba.documentid = pil.partinvoiceid
-	INNER JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid
-	WHERE ba.invoicenumber = '119754'
-	GROUP BY partinvoicelineid LIMIT 1
+		(sum(debitamt) - sum(creditamt)) AS OOB_Amount,
+		pil.adjustmentprice
+	FROM papartinvoiceline pil -- select the list of part invoice lines
+	INNER JOIN mabusinessaction ba ON ba.documentid = pil.partinvoiceid -- join to compare commoninvoicenumber and management activity
+	INNER JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid -- join to grab list of all management activity accounting entries to be made
+	WHERE ba.invoicenumber = '119754' 
+	    AND qtysold = 10000 -- where quantity sold is only 1
+	GROUP BY partinvoicelineid -- allows totalling per part invoice line
+	ORDER BY pil.adjustmentprice DESC
+	LIMIT 1
 	) bob
-WHERE bob.partinvoicelineid = pil.partinvoicelineid;
+WHERE bob.partinvoicelineid = pil.partinvoicelineid
 
 
 -- riley's
