@@ -23,8 +23,8 @@ after running the diagnostic, the column updatestatus will tell you if you need 
 if not corrected the update won't correct that part. if (Manual Update Required, See SQL Comments) is returned, you will need to manually update 
 the part invoice line, using the sql after the update, labeled "manual part update" */
 
-SELECT pi.partinvoicenumber,
-	pil.partnumber,
+SELECT ('Part Invoice Number: ' || pi.partinvoicenumber) as invoicenumber,
+	('Part #: ' || pil.partnumber) as partnumber,
 	c.categorycode AS currcat,
 	cpart.categorycode AS newcat,
 	CASE 
