@@ -1,3 +1,4 @@
+-- jason rules
 SELECT documentnumber,
 	sum(debitamt * .0001) AS debits,
 	sum(creditamt * .0001) AS credits,
