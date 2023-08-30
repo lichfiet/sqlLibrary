@@ -1,7 +1,10 @@
+-- EVO-20828 List of Updates that may or may not work
+--
+-- SQL Description: Diagnostic to see if this is the issue, if it returns no results the issue is different
+-- How to Use: Replace the 9999999999 below with a valid user id from coprincipal. If the fourth column says (Invlalid User ID) the userid is not valid
+-- Jira Key/CR Number: EVO-31806 | https://lightspeeddms.atlassian.net/browse/EVO-31806
+-- SQL Statement:
 
--- Diagnostic to see if this is the issue, if it returns no results the issue is different
--- To Use: Replace the 9999999999 below with a valid user id from coprincipal.
--- If the fourth column says (Invlalid User ID) the userid is not valid
 --
 -- Note: You can ignore most of the comments, except for the ones that say (REPLACE ME)
 -- which highlight the number that needs to be replaced in order for the update sql to work
