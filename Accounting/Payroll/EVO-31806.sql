@@ -31,7 +31,7 @@ LEFT JOIN coprincipal newp ON newp.userid = bob.newuserid -- insert new user her
 WHERE p.userid IS NULL;
 
 
-//ONLY USE IF ALL ARE GOING TO THE SAME EMPLOYEE?/
+/*ONLY USE IF ALL ARE GOING TO THE SAME EMPLOYEE, if not read comment below*/
 UPDATE cotimecard tc
 SET principalid = bob.newuserid
 FROM (
@@ -51,3 +51,5 @@ FROM (
 	WHERE p.userid IS NULL
 	) bob
 WHERE bob.timecardid = tc.timecardid
+/* un-comment the line below, and select the "baduserid" from the diagnostic, and replace the XXXX with it. This will make the update only affect the "baduserid" you picked. 
+ --    AND tc.princiapalid = XXXX <-- Use this if there are multiple userids with this issue in cotimecard
