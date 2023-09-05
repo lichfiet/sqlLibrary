@@ -1,4 +1,9 @@
-
+-- EVO-18036 List of Updates and a Diagnostic
+--
+-- SQL Description: diagnostic and update(s) for this CR
+-- How to Use: Copy the SQL statement, and replace XXXXXXX with repair order number
+-- Jira Key/CR Number: EVO-18036 | https://lightspeeddms.atlassian.net/browse/EVO-18036
+-- SQL Statement:
 
 -- DIAGNOSTIC // if a matching category is found, the second and third column will populate, and you can run Update 1,
 -- if they show up blank, a matching category in the correct store does not exist and will need to be created.
@@ -21,7 +26,7 @@ INNER JOIN cocategory badcat ON badcat.categoryid = rol.categoryid
 LEFT JOIN cocategory newcat ON newcat.categorycode = badcat.categorycode
 	AND newcat.storeid = rol.storeid
 INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
-WHERE repairordernumber = 16941 -- replace me
+WHERE repairordernumber = XXXXXXX -- replace me
 	AND ba.STATUS = 2;
 
 -- UPDATE // This will only work if the Diagnostic SQL's columns 2 and 3 were populated. If they were not,
@@ -44,7 +49,24 @@ FROM (
 	INNER JOIN cocategory newcat ON newcat.categorycode = badcat.categorycode
 		AND newcat.storeid = rol.storeid
 	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
-	WHERE repairordernumber = 16941
+	WHERE repairordernumber = XXXXXXX
 		AND ba.STATUS = 2
 	) bob
-WHERE bob.id = rol.repairorderlaborid
+WHERE bob.id = rol.repairorderlaborid;
+
+-- UPDATE // replace RO number and CategoryID before running
+UPDATE serepairorderlabor rol
+SET categoryid = xxxxxxxx - replace me with correct categoryid
+FROM (
+	SELECT DISTINCT repairorderlaborid AS ID
+	FROM serepairorderlabor rol
+	INNER JOIN serepairorderjob roj ON roj.repairorderjobid = rol.repairorderjobid
+	INNER JOIN serepairorderunit rou ON rou.repairorderunitid = roj.repairorderunitid
+	INNER JOIN serepairorder ro ON ro.repairorderid = rou.repairorderid
+	INNER JOIN cocategory badcat ON badcat.categoryid = rol.categoryid
+		AND badcat.storeid != rol.storeid
+	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
+	WHERE repairordernumber = xxxxxx -- replace me with RO number
+		AND ba.STATUS = 2
+	) bob
+WHERE bob.id = rol.repairorderlaborid;
