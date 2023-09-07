@@ -1,5 +1,14 @@
+-- EVO-34321 Delete for duplicate taxes
+--
+-- SQL Description:deletes dupe tax lines
+-- How to Use: replace x's with the repair order number
+-- Jira Key/CR Number: EVO-34321 | https://lightspeeddms.atlassian.net/browse/EVO-34321
+-- SQL Statement:
+
+
 --Written by John Scott
---The script still requires some testing to make sure its not a problem for other scenario's. Please contact John Scott if you encounter this issue. It is also imperative that the script be ran in the proper order according to how it's laid out. Please do not edit this.
+--The script still requires some testing to make sure its not a problem for other scenario's. Please contact John Scott if you encounter this issue. 
+--It is also imperative that the script be ran in the proper order according to how it's laid out. Please do not edit this.
 DELETE
 FROM serepairordertaxentity fix USING (
 		SELECT DISTINCT rote.repairordertaxitemid,
