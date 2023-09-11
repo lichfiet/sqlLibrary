@@ -33,10 +33,23 @@ FROM (
 	) meow
 WHERE meow.acctid = coa.acctdeptid
 
-
+-- reorganizes department accounts
 SELECT row_Number() OVER (
-		PARTITION BY deptid ORDER BY coa.acctdept
-		),
+		PARTITION BY d.deptcode ORDER BY regexp_replace(coa.acctdept, '[^0-9]+', '', 'g')
+		) + (d.deptcode::int * 10000),
+	CASE 
+		WHEN textregexeq(coa.acctdept, '^[[:digit:]]+(\.[[:digit:]]+)?$') = true
+			THEN 0
+		ELSE 1
+		END,
+	d.deptcode,
+	regexp_replace(coa.acctdept, '[^0-9]+', '', 'g'),
+	textregexeq(coa.acctdept, '^[[:digit:]]+(\.[[:digit:]]+)?$') AS isnumeric,
+	CASE 
+		WHEN d.deptcode = ''
+			THEN 0
+		ELSE cast(d.deptcode AS INT)
+		END AS test,
 	*
 FROM glchartofaccounts coa
 INNER JOIN (
@@ -45,5 +58,11 @@ INNER JOIN (
 	FROM glchartofaccounts
 	INNER JOIN gldepartment ON deptid = departmentsid
 	) row ON row.acctdeptid = coa.acctdeptid
-WHERE accountingid = 5
+INNER JOIN gldepartment d ON d.departmentsid = coa.deptid
+WHERE d.deptcode != ''
+ORDER BY d.deptcode,
+	row_Number() OVER (
+		PARTITION BY d.deptcode ORDER BY regexp_replace(coa.acctdept, '[^0-9]+', '', 'g')
+		)
+
 
