@@ -1,3 +1,5 @@
+https://lightspeeddms.atlassian.net/browse/EVO-40147
+
 -- sets accounts to new department and code and acctdept, based on if they had an acctcode including a deptcode
 UPDATE glchartofaccounts coa
 SET acctcode = meow.newacctcode,
