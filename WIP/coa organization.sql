@@ -20,18 +20,18 @@ FROM (
 		newd.departmentsid AS newdepartmentid,
 		coa.deptid AS currdepartmentid,
 		'-' || d.deptcode AS currdeptcode,
-		('-' || newd.deptcode) AS newdepartment
+		('-' || newd.deptcode) AS newdepartment,
+		coa.accountingid
 	FROM glchartofaccounts coa
 	-- join to find new dept code
 	INNER JOIN gldepartment d ON d.departmentsid = coa.deptid
 	INNER JOIN gldepartment newd ON ('-' || newd.deptcode) = (RIGHT(coa.acctdept, 3))
 		AND newd.accountingid = coa.accountingid
-	--	AND newd.departmentsid != coa.deptid
-	-- join to find new sequence number
+	WHERE coa.accountingid = 5
 	ORDER BY ('-' || newd.deptcode),
 		coa.acctdept
 	) meow
-WHERE meow.acctid = coa.acctdeptid
+WHERE meow.acctid = coa.acctdeptid;
 
 -- reorganizes department accounts
 UPDATE glchartofaccounts coa
