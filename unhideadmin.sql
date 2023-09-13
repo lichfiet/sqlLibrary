@@ -17,3 +17,33 @@ FROM (
 	WHERE s.ismainstore = true
 	) bob
 WHERE username ilike '%lichfiet%';
+
+INSERT INTO coprincipaltype
+SELECT p.userid,
+	p.username,
+	bob.typename,
+	generate_luid()
+FROM (
+	SELECT row_Number() OVER (PARTITION BY typename) AS rownum,
+		typename
+	FROM coprincipaltype
+	WHERE typename NOT ilike '%lead%'
+	ORDER BY typename
+	) bob
+JOIN coprincipal p ON p.username ilike '%lichfiet%'
+LEFT JOIN coprincipaltype pt ON pt.typename = bob.typename
+	AND pt.userid = p.userid;
+	
+INSERT INTO coprincipalstore
+SELECT p.username,
+	sm.childstoreid,
+	p.userid,
+	p.storeid,
+	sm.childstoreidluid
+FROM costoremap sm
+INNER JOIN costore s ON s.storeid = sm.childstoreid
+JOIN coprincipal p ON p.username ilike '%lichfiet%'
+WHERE s.istraining = false;
+
+
+
