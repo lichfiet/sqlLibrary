@@ -35,43 +35,30 @@ FROM (
 	) meow
 WHERE meow.acctid = coa.acctdeptid;
 
--- reorganizes department accounts
+-- reorganizes department accounts // reaplce the accountingid so it is store specific
+
 UPDATE glchartofaccounts coa
 SET sequencenumber = bob.epicsequencenumber
 FROM (
-	SELECT coa.acctdeptid as id,
-	row_Number() OVER (
+	SELECT coa.acctdeptid AS id,
+		row_Number() OVER (
 			PARTITION BY d.deptcode ORDER BY regexp_replace(coa.acctdept, '[^0-9]+', '', 'g')
 			) + (d.deptcode::INT * 1000000) AS epicsequencenumber,
-		CASE 
-			WHEN textregexeq(coa.acctdept, '^[[:digit:]]+(\.[[:digit:]]+)?$') = true
-				THEN 0
-			ELSE 1
-			END,
 		d.deptcode,
-		regexp_replace(coa.acctdept, '[^0-9]+', '', 'g'),
 		textregexeq(coa.acctdept, '^[[:digit:]]+(\.[[:digit:]]+)?$') AS isnumeric,
-		CASE 
-			WHEN d.deptcode = ''
-				THEN 0
-			ELSE cast(d.deptcode AS INT)
-			END AS test,
-		*
+		coa.acctdept,
+		coa.acctcode
 	FROM glchartofaccounts coa
-	INNER JOIN (
-		SELECT acctdeptid,
-			deptcode
-		FROM glchartofaccounts
-		INNER JOIN gldepartment ON deptid = departmentsid
-		) row ON row.acctdeptid = coa.acctdeptid
 	INNER JOIN gldepartment d ON d.departmentsid = coa.deptid
-	WHERE d.deptcode != ''
+	WHERE d.deptcode NOT IN ('', '10')
+		AND coa.accountingid = 5 -- REPLACE ME
 	ORDER BY d.deptcode,
 		row_Number() OVER (
 			PARTITION BY d.deptcode ORDER BY regexp_replace(coa.acctdept, '[^0-9]+', '', 'g')
 			)
 	) bob
 WHERE bob.id = coa.acctdeptid
+
 
 
 
