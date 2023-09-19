@@ -1,0 +1,602 @@
+// Use DBML to define your database structure
+// Docs: https://dbml.dbdiagram.io/docs
+
+Project LightspeedAccountingDBMap {
+  database_type: 'PostgreSQL'
+  Note: '''
+    # Lightspeed Accounting DB Map
+    Howdy hey, this is the Lightspeed Database Map for Accounting. I'm hoping to build it out to include
+    as much of the accounting information as possible, including JOINS and notes about certain columns and
+    their potential values / where they're references in Lightspeed. It's intended to put the old 
+    "Table Identifiers" CSV to death and to move to something easier to read and search.
+
+    ### How do I use it?
+    
+    Well, there are two things you can take note of.
+
+      1. At the top of the screen, there are two options: Table Structure, and Relationships.
+      Table structure lists this tab, and gives you the option to search tables and their joins,
+      and Relationships, will show you a graphical map of all the different tables. They are
+      haphazardly color coordinated, and a key will be coming soon, as well as table groups.
+      2. That's it.
+  '''
+}
+
+
+Table glaccountpayroll [headercolor: #990D0D] {
+  accountingid integer [null]
+  description text [not null]
+  dtstamp timestampwithouttimezone [null]
+  glaccountpayrollid bigint [not null]
+  glaccountpayrollkey text [null]
+  multistore smallint [null]
+  userid bigint [null]
+}
+
+Table glaccountpayrollfieldaccount [headercolor: #990D0D] {
+  accountcode text [null]
+  accountdescription text [null]
+  accountingid integer [null]
+  dtstamp timestampwithouttimezone [null]
+  fieldaccountnumber text [null]
+  glaccountpayrollaccountid integer [not null]
+  glaccountpayrollfieldaccountid bigint [not null]
+  glaccountpayrollfieldid bigint [null]
+  glaccountpayrollid bigint [null]
+  payroll text [null]
+  userid bigint [null]
+}
+
+Table glbalance [headercolor: #E4A62E, note: '''
+  This table is updated any time the **Recalculate** button is pressed in 
+  *(General Ledger -> Chart of Accounts)*. The `month1-12` columns are updated 
+  based on the sum of a GL Account's History for each month.
+  For every Fiscal Year that there exists GL History entries, 
+  GL Balance will have an entry.
+'''] {
+
+  glbalancesid bigint [primary key, not null, note:'']
+  accountingid integer [null, null]
+  accountingidluid bigint [not null, not null]
+  acctdeptid bigint [null, null]
+  beginningbalance bigint [null, null]
+  dtstamp timestampwithouttimezone [null, null]
+  fiscalyear smallint [null, null]
+  month1 bigint [null]
+  month2 bigint [null]
+  month3 bigint [null]
+  month4 bigint [null]
+  month5 bigint [null]
+  month6 bigint [null]
+  month7 bigint [null]
+  month8 bigint [null]
+  month9 bigint [null]
+  month10 bigint [null]
+  month11 bigint [null]
+  month12 bigint [null]
+  preluidglbalancesid integer [null]
+  storeid integer [null]
+  storeidluid bigint [not null]
+  userid bigint [null]
+}
+
+Table glbankreconciliation [headercolor: #2D6512] {
+  accountingid integer [null]
+  accountingidluid bigint [not null]
+  approveddate timestampwithouttimezone [null]
+  approverid bigint [null]
+  bankreconciliationid bigint [not null]
+  dtstamp timestampwithouttimezone [null]
+  financialaccountid bigint [null]
+  glaccountid bigint [null]
+  glaccountmode integer [null]
+
+  isclosed smallint [null, note:'''
+    **Options:** </br>
+
+    0 = Open </br>
+    1 = Closed
+  ''']
+
+  preluidbankreconciliationid integer [null]
+  previousstatementbalance bigint [null]
+  previousstatementdate timestampwithouttimezone [null]
+  statementbalance bigint [null]
+  statementdate timestampwithouttimezone [null]
+  userid bigint [null]
+}
+
+Table glbudget [headercolor: #E4A62E] {
+  glbudgetsid bigint [not null, pk]
+  accountingid integer [null]
+  accountingidluid bigint [not null]
+  acctdeptid bigint [null]
+  beginningmonth smallint [null]
+  budget1 bigint [null]
+  budget2 bigint [null]
+  budget3 bigint [null]
+  budget4 bigint [null]
+  budget5 bigint [null]
+  budget6 bigint [null]
+  budget7 bigint [null]
+  budget8 bigint [null]
+  budget9 bigint [null]
+  budget10 bigint [null]
+  budget11 bigint [null]
+  budget12 bigint [null]
+  dtstamp timestampwithouttimezone [null]
+  fiscalyear smallint [null, default: 'YYYY format']
+  preluidglbudgetsid integer [null]
+  userid bigint [null]
+}
+
+Table glchartofaccounts [headercolor: #EB801B] {
+  acctdeptid bigint [not null, pk]
+  accountingid integer [null]
+  accountingidluid bigint [not null]
+  acctcode text [null, note: 'the account number without the department code']
+  acctdept text [null, note: 'the account number with the department code']
+  acctdesc text [null]
+
+  accttype integer [note:'''
+     **Options:** </br>
+
+    1 = Asset </br>
+    2 = Liability </br>
+    3 = Revenue </br>
+    4 = Expense </br>
+    5 = Owners equity </br>
+    6 = Cost Of Goods Sold
+  ''']
+
+  active boolean [note:''' 
+     **Options:** </br>
+
+    true = Account is Active </br>
+    false = Account is In-Active
+  ''']
+
+  baseaccount smallint [null]
+  budgetind smallint [null]
+  consind smallint [null]
+  currentbalance bigint [null]
+  debitcredit integer [null]
+  defaultposting smallint [null]
+  deptid bigint [note:'''
+
+    FOREIGN KEY:
+    departmentsid FROM glacctdepartment
+  
+  ''']
+  dtstamp timestampwithouttimezone [null, note:'''epic text''']
+  flooringinterest boolean [not null]
+  headerdetailtotalcons integer [null, note:'''
+     **Options:** </br>
+
+    1	= Header Account </br>
+    2	= Detail Account </br>
+    3	= Total Account </br>
+    4	= Consolidated Account </br>
+  ''']
+  indentcolumns smallint [null]
+  lastdatecheck timestampwithouttimezone [null]
+  lastpayrollaccountupdatedate timestampwithouttimezone [null]
+  lastyearstartbalance bigint [null]
+  pagebreak smallint [null]
+  payrollind smallint [null]
+  preluidacctdeptid integer [null]
+  profitbalance integer [null, note: '''
+     **Options:** </br>
+
+    1 = Profit and loss account </br>
+    2 = Balance sheet account </br>
+  ''']
+  schedule integer [null, note:'''
+     **Options:** </br>
+
+    0 = None </br>
+    1 = AR </br>
+    2 = AP </br>
+    3 = Payroll </br>
+    4 = Major Units </br>
+    5 = Rental Billing </br>
+  ''']
+  sequencenumber integer [null]
+  skiplinesafterprint smallint [null]
+  thisyearstartbalance bigint [null]
+  totallevel smallint [null]
+  underline integer [null, note:'''
+     **Options:** </br>
+
+    0 = NONE </br>
+    1 = Single </br>
+    3 = Double </br>
+  ''']
+  userid bigint [null]
+}
+
+Table glconsxref [headercolor: #EB801B] {
+  glconsxrefid bigint [not null, pk]
+  accountingid integer [null]
+  accountingidluid bigint [not null]
+  acctdeptid bigint [null, note:'This is the acctdeptid of the account detail account.'] 
+  consacctdeptid bigint [null, note: 'This is the acctdeptid of the consolidated account.']
+  dtstamp timestampwithouttimezone [null]
+  userid bigint [null]
+}
+
+Table gldepartment [headercolor: #EB801B] {
+  departmentsid bigint [not null, pk]
+  accountingid integer [null]
+  accountingidluid bigint [not null]
+  aprilsalestarget bigint [null]
+  augustsalestarget bigint [null]
+  decembersalestarget bigint [null]
+  deptcode text [null]
+  deptname text [null]
+  dtstamp timestampwithouttimezone [null]
+  februarysalestarget bigint [null]
+  grossprofittarget bigint [null]
+  januarysalestarget bigint [null]
+  julysalestarget bigint [null]
+  junesalestarget bigint [null]
+  marchsalestarget bigint [null]
+  maysalestarget bigint [null]
+  netprofittarget bigint [null]
+  novembersalestarget bigint [null]
+  octobersalestarget bigint [null]
+  preluiddepartmentsid integer [null]
+  septembersalestarget bigint [null]
+  standarddepartment text [not null]
+  userid bigint [null]
+}
+
+Table gldistribution [headercolor: #A15CF5] {
+  accountingid integer [null]
+  accountingidluid bigint [not null]
+  description text [null]
+  distributionid bigint [not null]
+  dtstamp timestampwithouttimezone [null]
+  preluiddistributionid integer [null]
+  userid bigint [null]
+}
+
+Table gldistributionaccount [headercolor: #A15CF5] {
+  accountid bigint [not null]
+  accountingid integer [null]
+  accountingidluid bigint [not null]
+  distaccountid bigint [not null]
+  distlinenumber integer [not null]
+  distributionid bigint [null]
+  distributionpct integer [not null]
+  dtstamp timestampwithouttimezone [null]
+  preluiddistaccountid integer [null]
+  storeid integer [not null]
+  storeidluid bigint [not null]
+  userid bigint [null]
+}
+
+Table glexportconnhistory [headercolor: #990D0D] {
+  datelastsubmitted timestampwithtimezone [null]
+  dtstamp timestampwithouttimezone [null]
+  exportconnhistoryid bigint [not null]
+  exportconnsettingsid bigint [null]
+  oem text [null]
+  storeidluid bigint [not null]
+  userid bigint [not null]
+}
+
+Table glexportconnsettings [headercolor: #990D0D] {
+  dtstamp timestampwithouttimezone [null]
+  exportconnsettingsid bigint [not null]
+  locationid text [not null]
+  password text [not null]
+  providername text [not null]
+  storeidluid bigint [not null]
+  url text [not null]
+  username text [not null]
+  userid bigint [not null]
+}
+
+Table glfinancialaccount [headercolor: #2D6512] {
+  accountid bigint [not null]
+  accountingid integer [null]
+  accountingidluid bigint [not null]
+  accountnumber text [null]
+  accounttype smallint [null]
+  active smallint [null]
+  address1 text [null]
+  address2 text [null]
+  city text [null]
+  contact text [null]
+  defaulttransactiontypeid bigint [null]
+  defaulttranstype text [null]
+  dtstamp timestampwithouttimezone [null]
+  epayaccount boolean [not null]
+  externalfinancialaccountid bigint [null]
+  fax text [null]
+  glaccountid bigint [null]
+  name text [null]
+  notes text [null]
+  phone text [null]
+  preluidaccountid integer [null]
+  state text [null]
+  userid bigint [null]
+  zip text [null]
+}
+
+Table glhistory [headercolor: #011B4E, note:'''
+  ### **When Querying From This Table:** </br>
+  **Pay attention to the accountingid and locationid columns as well as their luids'!**
+  </br>
+  They must match the `accountingid` of the GL Account that the entry is assigned to, as well as having 
+  the correct values as they realate to each other based on the `costoremap` table.
+  </br>
+  </br>
+  To create a join on `costoremap` you can reference:
+  ```sql
+  INNER JOIN costoremap sm ON h.accountingid = sm.parentstoreid
+  ```  
+  In this example, the ```glhistory``` table is aliased with `h` and we are finding the matching entry in
+  `costoremap` based on the `parentstoreid` and `accountingid` columns in both tables. This gives us the
+  ability to find the `childstoreid` field from `costoremap` which correlates to the `locationid` in
+  `glhistory`
+  </br>
+  A finished SQL query using this JOIN might look like this:
+  ```sql
+  SELECT h.accountingid,
+    sm.parentstoreid,
+    h.locationid,
+    sm.childstoreid,
+    h.glhistoryid
+  FROM glhistory h
+  INNER JOIN costoremap sm ON h.accountingid = sm.parentstoreid
+  WHERE h.date > '01/01/2023'
+  ```
+
+'''] {
+  glhistoryid bigint [not null, pk]
+  accountingid integer [null]
+  accountingidluid bigint [not null]
+  acctdeptid bigint [null]
+  amtcredit bigint [null, default: 'EX: 10000 = 10.0000']
+  amtdebit bigint [null, default: 'EX: 10000 = 10.0000']
+  date timestampwithouttimezone [null, default: '1900-01-01 01:01:01.001']
+  description text [null, note: '*description* column inside an accounts **History** tab']
+  documentnumber text [null, note: '*document number* column inside an accounts **History** tab']
+  dtstamp timestampwithouttimezone [null]
+  flooringinterestmajorunitid bigint [not null]
+  glpct integer [null]
+  isconverted boolean [null]
+  isflooringinvoice boolean [not null]
+  isreconciliationadjustment smallint [null]
+  jestate integer [null, note: '''
+    **Options:** </br>
+    0 = In Balance Not Posted </br>
+    1 = Posted </br>
+    2 = Reversed Transaction </br>
+    9 = Out of balance not posted </br>
+
+    Options 9 and 1 should only appear inside the Journal Entry screen
+  ''']
+  journal integer [null]
+  journalentryid integer [null, note: 'This is the Transaction Number in Lightspeed']
+  journalentrysrl smallint [null]
+  jtypeid bigint [null]
+  locationdocumentid bigint [null, note:'''
+    **FOREIGN KEY:** </br>
+    *receivingdocumentid FROM pareceivingdocument*
+  ''']
+  locationdocumenttype integer [null]
+  locationid integer [null]
+  locationid_5_3 integer [null]
+  locationidluid bigint [not null]
+  partshipmentid bigint [not null]
+  plclearing smallint [null]
+  postingdate timestampwithouttimezone [null]
+  preluidglhistoryid integer [null]
+  previouslyfixed boolean [not null]
+  quantity bigint [null]
+  reconciliationgroup bigint [null]
+  reconciliationid bigint [null]
+  reconciliationstate integer [null]
+  reference1 text [null]
+  reference2 text [null]
+  schedacctid text [null, note:'''
+    **FOREIGN KEY:**
+    majorunitid FROM samajorunit </br>
+    vendorid FROM apvendor </br>
+    arcustomerid FROM cocustomer </br>
+  ''']
+  scheddocid integer [null]
+  scheddocsrl smallint [null]
+  scheddoctypeid integer [null, note:'''
+     **Options:** </br>
+    0 = None</br>
+    1 = AR</br>
+    2 = AP</br>
+    3 = Payroll</br>
+    4 = Major Units</br>
+    5 = Rental Billing</br>
+    6 = Deal Deposit</br>
+    7 = Deposit Repair Order</br>
+    8 = Deposit Part</br>
+    10 = Warranty Receivable</br>
+    12 = Receiving Purchase Holding</br>
+  ''']
+  schedmutype integer [null]
+  schedpostind smallint [null]
+  scheduleidentifier bigint [null, note:'''
+    FOREIGN KEY:
+
+    sltrxid FROM glsltransaction </br>
+    majorunitid FROM samajorunit </br>
+    partshipment FROM papartshipment </br>
+    apcheckheaderid FROM apcheckheader </br>
+  ''']
+  schedxrefid bigint [null, note:'''
+    FOREIGN KEY:
+
+    sltrxid FROM glsltransaction
+  ''']
+  transactiontype text [null]
+  transfered smallint [null]
+  userid bigint [null]
+}
+
+Table gljournaltype [headercolor: #011B4E] {
+  accountingid integer [null]
+  accountingidluid bigint [not null]
+  defaultflag smallint [null]
+  dtstamp timestampwithouttimezone [null]
+  journaldescription text [null]
+  journaltype text [null]
+  journaltypeid bigint [not null]
+  manualbatch1 smallint [null]
+  manualbatch2 smallint [null]
+  notes text [null]
+  preluidjournaltypeid integer [null]
+  recurringbatch smallint [null]
+  systemflag smallint [null]
+  userid bigint [null]
+}
+
+Table glqtybalance [headercolor: #E4A62E] {
+  accountingid integer [null]
+  acctdeptid integer [null]
+  beginningmonth smallint [null]
+  beginningqtybalance bigint [null]
+  dtstamp timestampwithouttimezone [null]
+  fiscalyear smallint [null]
+  glqtybalancesid bigint [not null]
+  month1 bigint [null]
+  month10 bigint [null]
+  month11 bigint [null]
+  month12 bigint [null]
+  month2 bigint [null]
+  month3 bigint [null]
+  month4 bigint [null]
+  month5 bigint [null]
+  month6 bigint [null]
+  month7 bigint [null]
+  month8 bigint [null]
+  month9 bigint [null]
+  preluidglqtybalancesid integer [null]
+  userid bigint [null]
+}
+
+Table glscheduletype [headercolor: #011B4E] {
+  accountingid integer [not null]
+  accountingidluid bigint [not null]
+  dtstamp timestampwithouttimezone [null]
+  lookupwindesc text [null]
+  scheddesc text [null]
+  schedtypeid integer [not null]
+  userid bigint [null]
+  xmlstr text [null]
+}
+
+Table glsltransaction [headercolor: #24BAB1] {
+  accountingid integer [null]
+  accountingidluid bigint [not null]
+  acctid bigint [null]
+  accttype integer [null, note:'''
+    **Options:** <br>
+    0 = None <br>
+    1 = AR <br>
+    2 = AP <br>
+    3 = Payroll <br>
+    4 = Major Units <br>
+    5 = Rental Billing <br>
+  ''']
+  amountavailablefordiscount bigint [null]
+  apsource integer [null]
+  converted smallint [null]
+  date timestampwithouttimezone [null]
+  datereceived timestampwithouttimezone [null]
+  description text [null]
+  discountdate timestampwithouttimezone [null]
+  discounttakensofar bigint [null]
+  docamt bigint [null]
+  docid integer [null]
+  docrefglid integer [null]
+  docrefid bigint [null]
+  docsrl smallint [null]
+  documentnumber text [null]
+  dscntamt bigint [null]
+  dtstamp timestampwithouttimezone [null]
+  duedate timestampwithouttimezone [null]
+  externalaccountingpostingdate timestampwithtimezone [null]
+  externalaccountingtransactionid text [not null]
+  externaltransactionid bigint [null]
+  intuittid text [not null]
+  locationdocumentid bigint [null]
+  locationdocumenttype integer [null]
+  ponumber text [null]
+  preluidsltrxid integer [null]
+  reference1 text [null]
+  remainingamt bigint [null]
+  sltrxid bigint [not null]
+  sltrxstate integer [null]
+  spansmultiplestores smallint [null]
+  storeid integer [not null]
+  storeid_5_3 integer [null]
+  storeidluid bigint [not null]
+  transtypeid bigint [null]
+  usedating smallint [null]
+  userid bigint [null]
+}
+
+Table gltransactiontype [headercolor: #011B4E] {
+  accountid bigint [null]
+  accountingid integer [null]
+  accountingidluid bigint [not null]
+  code text [null]
+  dtstamp timestampwithouttimezone [null]
+  hidden smallint [null]
+  income smallint [null]
+  loss smallint [null]
+  notes text [null]
+  preluidaccountid integer [null]
+  transactiontypeid bigint [not null]
+  type text [null]
+  userid bigint [null]
+}
+
+Ref: "glhistory"."jtypeid" <> "gljournaltype"."journaltypeid"
+
+Ref: "glchartofaccounts"."acctdeptid" <> "glhistory"."acctdeptid"
+
+Ref: "glbudget"."acctdeptid" <> "glchartofaccounts"."acctdeptid"
+
+Ref: "glbalance"."acctdeptid" <> "glchartofaccounts"."acctdeptid"
+
+Ref: "glhistory"."scheddoctypeid" <> "glscheduletype"."schedtypeid"
+
+Ref: "glconsxref"."acctdeptid" <> "glchartofaccounts"."acctdeptid"
+
+Ref: "glconsxref"."consacctdeptid" <> "glchartofaccounts"."acctdeptid"
+
+Ref: "glchartofaccounts"."deptid" <> "gldepartment"."departmentsid"
+
+Ref: "glbankreconciliation"."financialaccountid" <> "glfinancialaccount"."accountid"
+
+Ref: "glbankreconciliation"."glaccountid" <> "glfinancialaccount"."glaccountid"
+
+Ref: "glfinancialaccount"."glaccountid" <> "glchartofaccounts"."acctdeptid"
+
+Ref: "glqtybalance"."acctdeptid" <> "glchartofaccounts"."acctdeptid"
+
+Ref: "glhistory"."transactiontype" <> "gltransactiontype"."transactiontypeid"
+
+Ref: "glhistory"."schedxrefid" <> "glsltransaction"."sltrxid"
+
+Ref: "glhistory"."scheddocid" <> "glsltransaction"."docid"
+
+Ref: "gldistributionaccount"."distributionid" <> "gldistribution"."distributionid"
+
+Ref: "gldistributionaccount"."distaccountid" <> "glchartofaccounts"."acctdeptid"
+
+Ref: "glsltransaction"."docrefglid" <> "glhistory"."glhistoryid"
+
+Ref: "glhistory"."reconciliationid" < "glbankreconciliation"."bankreconciliationid"
