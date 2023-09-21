@@ -133,7 +133,7 @@ WHERE gls.sltrxid = data.sltrxid;
 
 
 
-
+-- EVO-17348
 -- Updates invoices where all the invoices are voided but doc amt not equal remaining amount
 
 UPDATE glsltransaction sl
