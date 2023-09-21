@@ -1,5 +1,5 @@
 -- update preapproved
-
+-- EVO-14212
 DELETE
 FROM glconsxref
 WHERE glconsxrefid IN (
