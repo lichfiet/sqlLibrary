@@ -130,3 +130,32 @@ FROM (
 		AND gls.description NOT ilike '%Void%'
 	) data
 WHERE gls.sltrxid = data.sltrxid;
+
+
+
+
+-- Updates invoices where all the invoices are voided but doc amt not equal remaining amount
+
+UPDATE glsltransaction sl
+SET remainingamt = docamt, -- set remaining amount = invoice amount
+	sltrxstate = 1 -- set state to unpaid
+FROM (
+	SELECT il.apinvoiceid AS id, -- ap invoice id or sltrxid
+		sl.documentnumber
+	FROM apcheckinvoicelist il -- list of invoices that have had checks paid on them
+	INNER JOIN apcheckheader ch ON ch.apcheckheaderid = il.apcheckheaderid -- join on checkheader to see the check states
+	INNER JOIN glsltransaction sl ON sl.sltrxid = il.apinvoiceid -- join to reference the glsl info (remaining amounts and whatnot)
+	WHERE sl.docamt != sl.remainingamt -- Where remaining amount != the invoice amount
+		AND sltrxstate NOT IN (9, 4) -- Not voided or already paid
+		AND sl.accttype = 2 -- Is an ap invoice
+	GROUP BY il.apinvoiceid,
+		sl.documentnumber
+	/* Whether all checks are voided */
+	HAVING sum(CASE 
+				WHEN ch.voidedflag = 2
+					THEN 1
+				ELSE 0
+				END) = count(il.apinvoiceid)::INT
+	) il
+WHERE il.id = sl.sltrxid
+
