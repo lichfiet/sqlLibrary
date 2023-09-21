@@ -2,8 +2,8 @@
 
 DELETE
 FROM glconsxref
-WHERE consxrefid IN (
-		SELECT consxrefid
+WHERE glconsxrefid IN (
+		SELECT glconsxrefid
 		FROM glconsxref cxr
 		LEFT JOIN glchartofaccounts consacct ON consacct.acctdeptid = cxr.consacctdeptid
 		LEFT JOIN glchartofaccounts detacct ON detacct.acctdeptid = cxr.acctdeptid
