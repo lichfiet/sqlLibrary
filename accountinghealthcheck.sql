@@ -324,6 +324,16 @@ HAVING SUM(amtdebit) - SUM(amtcredit) != 0
 		)
 ORDER BY MAX(DATE) DESC;
 
+/* day does not balance */
+SELECT 'day does not balance' AS description,
+SUM(amtdebit) - SUM(amtcredit) AS oob_amount,
+	LEFT(DATE::VARCHAR, 10)
+FROM glhistory h
+GROUP BY accountingid,
+	LEFT(DATE::VARCHAR, 10)
+HAVING SUM(amtdebit) - SUM(amtcredit) != 0
+ORDER BY MAX(DATE) DESC;
+
 /*journal entry to the current earnings account*/
 SELECT 'glhistory posted to the current earnings account' AS description,
 	hist.glhistoryid,
