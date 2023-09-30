@@ -1,37 +1,10 @@
-/* TLS-648 */
-/*	Output 1 - acctdeptid in glhistory not in glchartofaccounts     
-	Output 2 - acctdeptid not in glbalance table     
-	Output 3 - acctdeptid links to non-detail account     
-	Output 4 - transaction does not balance     
-	Output 5 - glhistory posted to the current earnings account     
-	Output 7 - detail account has mode different from consolidated mode     
-	Output 8 - non-detail consolidating or detail consolidating to non-detail     
-	Output 9 - departmentalized detail account not consolidating to consolidated department     
-	Output 10 - account consolidating to more than one consolidated department account     
-	Output 11 - consolidated department detail account (ie. blank department) set to consolidate     
-	Output 12 - debit balance acct consolidating to credit balance acct or credit to debit     
-	Output 13 - consolidation mapping has invalid acctdeptid     
-	Output 14 - checks for duplicate acctdeptid     
-	Output 15 - checks for duplicate consolidations
+/* Accounting Health Check */
+/*	
+    The first half of these SQLs are to pin-point setup related issues with the chart of accounts.
+    
+    The other half point out Product CRs or issues caused by Product CRs.
 */
-/*Output 5*/
-SELECT 'glhistory posted to the current earnings account' AS description,
-	hist.glhistoryid,
-	hist.journalentryid,
-	hist.DATE,
-	hist.acctdeptid,
-	hist.amtdebit,
-	hist.amtcredit,
-	hist.description,
-	hist.accountingid,
-	hist.locationid
-FROM glhistory hist,
-	acpreference pref
-WHERE pref.id = 'acct-CurrentEarningsAcctID'
-	AND hist.acctdeptid::TEXT = pref.value
-	AND hist.accountingid = pref.accountingid;
-
-/*Output 7*/
+/* Setup Issues */
 SELECT 'detail account has mode different from consolidated mode' AS description,
 	glconsxrefid,
 	coa.acctdept AS cons_from_acct,
@@ -73,42 +46,6 @@ WHERE coa.acctdeptid = xref.acctdeptid
 	AND xref.consacctdeptid = coa2.acctdeptid
 	AND coa.accttype != coa2.accttype;
 
-/*Output 8*/-- used to be 8
-SELECT 'non-detail consolidating or detail consolidating to non-detail' AS description,
-	coa.acctdept AS acctDept,
-	CASE 
-		WHEN coa.headerdetailtotalcons = 1
-			THEN 'Header'
-		WHEN coa.headerdetailtotalcons = 2
-			THEN 'Detail'
-		WHEN coa.headerdetailtotalcons = 3
-			THEN 'Total'
-		WHEN coa.headerdetailtotalcons = 4
-			THEN 'Consolidated'
-		ELSE ''
-		END AS type,
-	coa2.acctdept AS consAcctDept,
-	CASE 
-		WHEN coa2.headerdetailtotalcons = 1
-			THEN 'Header'
-		WHEN coa2.headerdetailtotalcons = 2
-			THEN 'Detail'
-		WHEN coa2.headerdetailtotalcons = 3
-			THEN 'Total'
-		WHEN coa2.headerdetailtotalcons = 4
-			THEN 'Consolidated'
-		ELSE ''
-		END AS consType
-FROM glconsxref xref,
-	glchartofaccounts coa,
-	glchartofaccounts coa2
-WHERE xref.acctdeptid = coa.acctdeptid
-	AND xref.consacctdeptid = coa2.acctdeptid
-	AND (
-		coa.headerdetailtotalcons != 2
-		OR coa2.headerdetailtotalcons != 4
-		);
-
 /*Output 9*/-- used to be 9
 SELECT 'departmentalized detail account not consolidating to consolidated department' AS description,
 	coa.acctdept,
@@ -125,23 +62,6 @@ WHERE xref.acctdeptid = coa.acctdeptid
 	AND xref.consacctdeptid = coa2.acctdeptid
 	AND coa2.deptid = dept.departmentsid
 	AND dept.deptcode != '';
-
-/*Output 10*/-- used to be 10
-SELECT 'account consolidating to more than one consolidated department account' AS description,
-	COUNT(coa.acctdeptid),
-	coa.accountingid,
-	coa.acctdeptid,
-	coa.acctdept
-FROM glconsxref xref
-LEFT JOIN glchartofaccounts coa ON xref.acctdeptid = coa.acctdeptid
-LEFT JOIN gldepartment dept ON coa.deptid = dept.departmentsid
-LEFT JOIN glchartofaccounts coa2 ON xref.consacctdeptid = coa.acctdeptid
-LEFT JOIN gldepartment dept2 ON coa2.deptid = dept2.departmentsid
-WHERE dept2.deptcode = ''
-GROUP BY coa.acctdeptid
-HAVING COUNT(coa.acctdeptid) > 1
-ORDER BY coa.accountingid,
-	coa.acctdeptid;
 
 /*Output 11*/-- used to be 11
 SELECT 'consolidated department detail account (ie. blank department) set to consolidate' AS description,
@@ -213,7 +133,18 @@ WHERE a.acctdeptid = b.acctdeptid
 	AND b.consacctdeptid = c.acctdeptid
 	AND a.debitcredit != c.debitcredit;
 
-/*glconsxref entry mapped to invalid GL Account*/-- used to be 13
+/*Detail Account Consolidating to More than 1 Consolidated Account*/-- used to be 14
+SELECT 'Account code ' || coa.acctdept || ' is consolidated to more than one account' AS description,
+	'(# of Consolidation): ' || COUNT(xr.acctdeptid) AS consolidation_count,
+	xr.acctdeptid AS cons_acctdeptid
+FROM glconsxref xr
+LEFT JOIN glchartofaccounts coa ON coa.acctdeptid = xr.acctdeptid
+GROUP BY xr.acctdeptid,
+	coa.acctdeptid
+HAVING COUNT(xr.acctdeptid) > 1;
+
+/* DEFECTS AND PRODUCT CRs */
+/*glconsxref entry mapped to invalid GL Account*/-- used to be 13 and 8 and 6
 SELECT 'glconsxref entry mapped to invalid GL Account OR invalid accountingid' AS description,
 	xref.glconsxrefid,
 	xref.acctdeptid,
@@ -257,16 +188,6 @@ WHERE det.acctdeptid IS NULL
 ORDER BY det.acctdeptid,
 	cons.acctdeptid;
 
-/*Detail Account Consolidating to More than 1 Consolidated Account*/-- used to be 14
-SELECT 'Account code ' || coa.acctdept || ' is consolidated to more than one account' AS description,
-	'(# of Consolidation): ' || COUNT(xr.acctdeptid) AS consolidation_count,
-	xr.acctdeptid AS cons_acctdeptid
-FROM glconsxref xr
-LEFT JOIN glchartofaccounts coa ON coa.acctdeptid = xr.acctdeptid
-GROUP BY xr.acctdeptid,
-	coa.acctdeptid
-HAVING COUNT(xr.acctdeptid) > 1;
-
 /*glhistory entries have an invalid ids or idluids*/-- output 15
 SELECT h.glhistoryid,
 	CASE 
@@ -305,7 +226,7 @@ WHERE (
 		);
 
 /*Multiple Entries in GL Balance for 1 Acctdeptid*/
-SELECT b.acctdeptid,
+SELECT 'duplicate glbalance entry for acctdeptid ' || b.acctdeptid AS description,
 	coa.acctdept,
 	b.fiscalyear,
 	count(fiscalyear) AS num_of_duplicates
@@ -386,10 +307,36 @@ SELECT 'transaction does not balance' AS description,
 		ELSE 'potential conversion defect'
 		END AS validity
 FROM glhistory h
-INNER JOIN costoremap sm on sm.parentstoreid = h.accountingid
-INNER JOIN costore s on s.storeid = sm.childstoreid
+INNER JOIN costoremap sm ON sm.parentstoreid = h.accountingid
+INNER JOIN costore s ON s.storeid = sm.childstoreid
 GROUP BY journalentryid,
 	accountingid,
 	s.conversiondate
 HAVING SUM(amtdebit) - SUM(amtcredit) != 0
+	AND LEFT(MAX(DATE::VARCHAR), 10) IN (
+		SELECT
+			LEFT(DATE::VARCHAR, 10)
+		FROM glhistory h
+		GROUP BY accountingid,
+			LEFT(DATE::VARCHAR, 10)
+		HAVING SUM(amtdebit) - SUM(amtcredit) != 0
+		ORDER BY MAX(DATE) DESC
+		)
 ORDER BY MAX(DATE) DESC;
+
+/*journal entry to the current earnings account*/
+SELECT 'glhistory posted to the current earnings account' AS description,
+	hist.glhistoryid,
+	hist.journalentryid,
+	hist.DATE,
+	hist.acctdeptid,
+	hist.amtdebit,
+	hist.amtcredit,
+	hist.description,
+	hist.accountingid,
+	hist.locationid
+FROM glhistory hist,
+	acpreference pref
+WHERE pref.id = 'acct-CurrentEarningsAcctID'
+	AND hist.acctdeptid::TEXT = pref.value
+	AND hist.accountingid = pref.accountingid;
