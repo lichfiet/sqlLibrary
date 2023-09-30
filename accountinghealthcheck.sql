@@ -4,134 +4,7 @@
     
     The other half point out Product CRs or issues caused by Product CRs.
 */
-/* Setup Issues */
-SELECT 'detail account has mode different from consolidated mode' AS description,
-	glconsxrefid,
-	coa.acctdept AS cons_from_acct,
-	CASE 
-		WHEN coa.accttype = 1
-			THEN 'Asset'
-		WHEN coa.accttype = 2
-			THEN 'Liability'
-		WHEN coa.accttype = 3
-			THEN 'Revenue'
-		WHEN coa.accttype = 4
-			THEN 'Expense'
-		WHEN coa.accttype = 5
-			THEN 'Owners Equity'
-		WHEN coa.accttype = 6
-			THEN 'Cost Of Goods'
-		ELSE ''
-		END AS cons_from_mode,
-	coa2.acctdept AS cons_from_acct,
-	CASE 
-		WHEN coa2.accttype = 1
-			THEN 'Asset'
-		WHEN coa2.accttype = 2
-			THEN 'Liability'
-		WHEN coa2.accttype = 3
-			THEN 'Revenue'
-		WHEN coa2.accttype = 4
-			THEN 'Expense'
-		WHEN coa2.accttype = 5
-			THEN 'Owners Equity'
-		WHEN coa2.accttype = 6
-			THEN 'Cost Of Goods'
-		ELSE ''
-		END AS cons_from_mode
-FROM glchartofaccounts coa,
-	glconsxref xref,
-	glchartofaccounts coa2
-WHERE coa.acctdeptid = xref.acctdeptid
-	AND xref.consacctdeptid = coa2.acctdeptid
-	AND coa.accttype != coa2.accttype;
-
-/*Output 9*/-- used to be 9
-SELECT 'departmentalized detail account not consolidating to consolidated department' AS description,
-	coa.acctdept,
-	coa2.acctdept AS consacctdept,
-	coa.acctdeptid,
-	coa2.acctdeptid AS consacctdeptid,
-	coa.deptid,
-	coa2.deptid AS consdeptid
-FROM glconsxref xref,
-	glchartofaccounts coa,
-	glchartofaccounts coa2,
-	gldepartment dept
-WHERE xref.acctdeptid = coa.acctdeptid
-	AND xref.consacctdeptid = coa2.acctdeptid
-	AND coa2.deptid = dept.departmentsid
-	AND dept.deptcode != '';
-
-/*Output 11*/-- used to be 11
-SELECT 'consolidated department detail account (ie. blank department) set to consolidate' AS description,
-	coa.accountingid,
-	coa.acctdeptid,
-	coa.acctdept AS cons_from_acct
-FROM glchartofaccounts coa,
-	glconsxref xref,
-	gldepartment dept
-WHERE coa.acctdeptid = xref.acctdeptid
-	AND coa.deptid = dept.departmentsid
-	AND dept.deptcode = ''
-ORDER BY coa.accountingid,
-	coa.acctdept;
-
-/*Output 12*/-- used to be 12
-SELECT 'debit balance acct consolidating to credit balance acct or credit to debit' AS description,
-	glconsxrefid,
-	a.acctdept,
-	CASE 
-		WHEN a.accttype = 1
-			THEN 'Asset'
-		WHEN a.accttype = 2
-			THEN 'Liability'
-		WHEN a.accttype = 3
-			THEN 'Revenue'
-		WHEN a.accttype = 4
-			THEN 'Expense'
-		WHEN a.accttype = 5
-			THEN 'Owners Equity'
-		WHEN a.accttype = 6
-			THEN 'Cost Of Goods'
-		ELSE ''
-		END AS mode_,
-	CASE 
-		WHEN a.debitcredit = 1
-			THEN 'Debit'
-		WHEN a.debitcredit = 2
-			THEN 'Credit'
-		ELSE ''
-		END AS type,
-	c.acctdept AS cons_acctdept,
-	CASE 
-		WHEN c.accttype = 1
-			THEN 'Asset'
-		WHEN c.accttype = 2
-			THEN 'Liability'
-		WHEN c.accttype = 3
-			THEN 'Revenue'
-		WHEN c.accttype = 4
-			THEN 'Expense'
-		WHEN c.accttype = 5
-			THEN 'Owners Equity'
-		WHEN c.accttype = 6
-			THEN 'Cost Of Goods'
-		ELSE ''
-		END AS cons_mode,
-	CASE 
-		WHEN c.debitcredit = 1
-			THEN 'Debit'
-		WHEN c.debitcredit = 2
-			THEN 'Credit'
-		ELSE ''
-		END AS cons_type
-FROM glchartofaccounts a,
-	glconsxref b,
-	glchartofaccounts c
-WHERE a.acctdeptid = b.acctdeptid
-	AND b.consacctdeptid = c.acctdeptid
-	AND a.debitcredit != c.debitcredit;
+/* SETUP ISSUES */
 
 /*Detail Account Consolidating to More than 1 Consolidated Account*/-- used to be 14
 SELECT 'Account code ' || coa.acctdept || ' is consolidated to more than one account' AS description,
@@ -238,15 +111,16 @@ GROUP BY coa.acctdept,
 	b.storeid
 HAVING count(b.fiscalyear) > 1;
 
-/*glbalance entries with a storeid not valid with costoremap*/-- may need revision for shared accounting stores
+/*glbalance entries with a storeid not valid with costoremap*/
 SELECT 'gl balance entry with invalid store, check output 15 as potential cause' AS description,
 	glbalancesid,
 	coa.acctdept,
 	b.fiscalyear
 FROM glbalance b
-INNER JOIN costoremap sm ON sm.parentstoreid = b.accountingid
+LEFT JOIN costoremap sm ON sm.parentstoreid = b.accountingid
+    AND sm.childstoreid = b.storeid
 INNER JOIN glchartofaccounts coa ON coa.acctdeptid = b.acctdeptid
-WHERE sm.childstoreid != b.storeid;
+WHERE sm.childstoreid IS NULL;
 
 /*acctdeptid in glhistory not in glchartofaccounts*/
 SELECT 'acctdeptid in glhistory not in glchartofaccounts' AS description,
