@@ -106,6 +106,14 @@ FROM (
 	) bob
 WHERE sl.sltrxid = bob.id;
 
+DELETE
+FROM aptopayinv
+WHERE aptopayinvid IN (
+		SELECT aptopayinvid
+		FROM aptopayinv tpi
+		INNER JOIN glsltransaction sl ON sl.sltrxid = tpi.apinvoiceid
+		WHERE sltrxstate IN (4, 9)
+		);
 
 
 
