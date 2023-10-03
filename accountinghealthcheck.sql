@@ -201,7 +201,8 @@ ORDER BY MAX(DATE) DESC;
 /* day does not balance */
 SELECT 'day does not balance' AS description,
 SUM(amtdebit) - SUM(amtcredit) AS oob_amount,
-	LEFT(DATE::VARCHAR, 10)
+	LEFT(DATE::VARCHAR, 10),
+	h.accountingid
 FROM glhistory h
 GROUP BY accountingid,
 	LEFT(DATE::VARCHAR, 10)
