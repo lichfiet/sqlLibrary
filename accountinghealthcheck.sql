@@ -5,7 +5,6 @@
     The other half point out Product CRs or issues caused by Product CRs.
 */
 /* SETUP ISSUES */
-
 /*Detail Account Consolidating to More than 1 Consolidated Account*/-- used to be 14
 SELECT 'Account code ' || coa.acctdept || ' is consolidated to more than one account' AS description,
 	'(# of Consolidation): ' || COUNT(xr.acctdeptid) AS consolidation_count,
@@ -118,7 +117,7 @@ SELECT 'gl balance entry with invalid store, check output 15 as potential cause'
 	b.fiscalyear
 FROM glbalance b
 LEFT JOIN costoremap sm ON sm.parentstoreid = b.accountingid
-    AND sm.childstoreid = b.storeid
+	AND sm.childstoreid = b.storeid
 INNER JOIN glchartofaccounts coa ON coa.acctdeptid = b.acctdeptid
 WHERE sm.childstoreid IS NULL;
 
@@ -188,8 +187,7 @@ GROUP BY journalentryid,
 	s.conversiondate
 HAVING SUM(amtdebit) - SUM(amtcredit) != 0
 	AND LEFT(MAX(DATE::VARCHAR), 10) IN (
-		SELECT
-			LEFT(DATE::VARCHAR, 10)
+		SELECT LEFT(DATE::VARCHAR, 10)
 		FROM glhistory h
 		GROUP BY accountingid,
 			LEFT(DATE::VARCHAR, 10)
@@ -200,7 +198,7 @@ ORDER BY MAX(DATE) DESC;
 
 /* day does not balance */
 SELECT 'day does not balance' AS description,
-SUM(amtdebit) - SUM(amtcredit) AS oob_amount,
+	SUM(amtdebit) - SUM(amtcredit) AS oob_amount,
 	LEFT(DATE::VARCHAR, 10),
 	h.accountingid
 FROM glhistory h
@@ -225,3 +223,108 @@ FROM glhistory hist,
 WHERE pref.id = 'acct-CurrentEarningsAcctID'
 	AND hist.acctdeptid::TEXT = pref.value
 	AND hist.accountingid = pref.accountingid;
+
+/*Unknown Unit on Major Unit Reconciliation / Invalid Schedule Identifier*/
+SELECT 'Account Number #' || coa.acctdept AS glaccountnumber,
+	h.scheduleidentifier AS muid,
+	h.acctdeptid,
+	SUM(amtdebit - amtcredit)::FLOAT / 10000 AS outofbalanceamt,
+	s.storecode,
+	s.storename
+FROM glhistory h
+LEFT JOIN samajorunit mu ON h.scheduleidentifier = mu.majorunitid
+INNER JOIN glchartofaccounts coa ON coa.acctdeptid = h.acctdeptid
+INNER JOIN costore s ON s.storeidluid = h.locationidluid
+WHERE coa.schedule = 4
+	AND mu.majorunitid IS NULL
+GROUP BY h.scheduleidentifier,
+	h.acctdeptid,
+	h.locationid,
+	s.storename,
+	coa.acctdept,
+	s.storecode
+ORDER BY (
+		CASE 
+			WHEN SUM(amtdebit - amtcredit) != 0
+				THEN 1
+			ELSE 0
+			END
+		),
+	SUM(amtdebit - amtcredit)::FLOAT / 10000 DESC;
+
+/*Unknown Supplier on GL Schedules Report*/
+SELECT CASE 
+		WHEN ps.partshipmentid IS NULL
+			THEN 'invalid partshipmentid or storeid'
+		WHEN (
+				su.suppliername IS NULL
+				OR su.suppliername = ''
+				)
+			THEN 'supplier ' || su.suppliercode || ' missing suppliername'
+		ELSE 'unknown error'
+		END AS issuedescription,
+	h.journalentryid AS transactionnumber,
+	h.documentnumber,
+	CASE 
+		WHEN length(h.description) > 23
+			THEN LEFT(h.description, 25) || '...'
+		ELSE h.description
+		END AS description,
+	((h.amtdebit - h.amtcredit) * .0001) AS amount,
+	h.DATE,
+	s.storecode,
+	ps.packingslip,
+	h.glhistoryid
+FROM glhistory h
+INNER JOIN (
+	SELECT sum(amtdebit),
+		sum(amtcredit),
+		(sum(amtdebit) - sum(amtcredit)) AS dif,
+		scheduleidentifier,
+		coa.acctdeptid
+	FROM glhistory h
+	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = h.acctdeptid
+	WHERE coa.schedule = 12
+	GROUP BY scheduleidentifier,
+		coa.acctdeptid
+	HAVING (sum(amtdebit) - sum(amtcredit)) != 0
+	) rpt ON rpt.scheduleidentifier = h.scheduleidentifier
+	AND rpt.acctdeptid = h.acctdeptid
+LEFT JOIN papartshipment ps ON ps.partshipmentid = h.scheduleidentifier
+	AND ps.storeid = h.locationid
+	AND ps.storeidluid = h.locationidluid
+LEFT JOIN pasupplier su ON ps.supplierid = su.supplierid
+LEFT JOIN costore s ON s.storeid = h.locationid
+WHERE (
+		ps.partshipmentid IS NULL
+		OR su.suppliername = ''
+		OR su.suppliername IS NULL
+		)
+ORDER BY h.scheduleidentifier;
+
+/*Vendor Invalid on AP Reconciliation / Invalid schedacctid tying to vendorid*/
+SELECT s.storename,
+	coa.acctdept AS accountnumber,
+	schedacctid,
+	SUM(amtdebit - amtcredit)::FLOAT / 10000 AS outofbalanceamt,
+	CASE 
+		WHEN SUM(amtdebit - amtcredit) = 0
+			THEN 'Not on AP Rec'
+		ELSE 'On AP Rec'
+		END AS recstatus
+FROM glhistory h
+INNER JOIN glchartofaccounts coa using (acctdeptid)
+LEFT JOIN apvendor v ON v.vendorid::TEXT = h.schedacctid
+INNER JOIN costore s ON h.locationid = s.storeid
+WHERE h.scheddoctypeid = 2
+	AND h.isconverted = false
+	AND v.vendorid IS NULL
+GROUP BY h.schedacctid,
+	coa.acctdept,
+	s.storename
+ORDER BY SUM(amtdebit - amtcredit) DESC,
+	acctdept ASC;
+
+
+
+
