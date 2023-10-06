@@ -143,7 +143,7 @@ LEFT JOIN glbalance bal ON coa.acctdeptid = bal.acctdeptid
 WHERE bal.acctdeptid IS NULL;
 
 /*glhistory entries tied to non-detail account*/
-SELECT 'acctdeptid links to non-detail account' AS description,
+SELECT 'acctdeptid links to non-detail account in glhistory' AS description,
 	hist.glhistoryid,
 	hist.acctdeptid,
 	coa.acctdept,
@@ -225,7 +225,7 @@ WHERE pref.id = 'acct-CurrentEarningsAcctID'
 	AND hist.accountingid = pref.accountingid;
 
 /*Unknown Unit on Major Unit Reconciliation / Invalid Schedule Identifier*/
-SELECT 'Account Number #' || coa.acctdept AS glaccountnumber,
+SELECT 'Unknown Unit for Account Number #' || coa.acctdept AS glaccountnumber,
 	h.scheduleidentifier AS muid,
 	h.acctdeptid,
 	SUM(amtdebit - amtcredit)::FLOAT / 10000 AS outofbalanceamt,
@@ -253,7 +253,8 @@ ORDER BY (
 	SUM(amtdebit - amtcredit)::FLOAT / 10000 DESC;
 
 /*Unknown Supplier on GL Schedules Report*/
-SELECT CASE 
+SELECT 'unknown supplier' AS description,
+	CASE 
 		WHEN ps.partshipmentid IS NULL
 			THEN 'invalid partshipmentid or storeid'
 		WHEN (
@@ -303,7 +304,8 @@ WHERE (
 ORDER BY h.scheduleidentifier;
 
 /*Vendor Invalid on AP Reconciliation / Invalid schedacctid tying to vendorid*/
-SELECT s.storename,
+SELECT 'Vendor Invalid on AP Rec' AS description,
+	s.storename,
 	coa.acctdept AS accountnumber,
 	schedacctid,
 	SUM(amtdebit - amtcredit)::FLOAT / 10000 AS outofbalanceamt,
@@ -324,7 +326,3 @@ GROUP BY h.schedacctid,
 	s.storename
 ORDER BY SUM(amtdebit - amtcredit) DESC,
 	acctdept ASC;
-
-
-
-
