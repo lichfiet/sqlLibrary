@@ -60,6 +60,14 @@ WHERE det.acctdeptid IS NULL
 ORDER BY det.acctdeptid,
 	cons.acctdeptid;
 
+/*glhistory entries with invalid jtypeid within last 4 years*/-- needs modification
+SELECT *
+FROM glhistory
+LEFT JOIN gljournaltype jt ON journaltypeid = jtypeid
+WHERE journaltypeid IS NULL
+	AND postingdate > '2018-01-01'
+ORDER BY DATE DESC;
+
 /*glhistory entries have an invalid ids or idluids*/-- output 15
 SELECT h.glhistoryid,
 	CASE 
@@ -326,3 +334,4 @@ GROUP BY h.schedacctid,
 	s.storename
 ORDER BY SUM(amtdebit - amtcredit) DESC,
 	acctdept ASC;
+	/* AR Rec Cut invalid will go here */
