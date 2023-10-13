@@ -82,7 +82,7 @@ AS (
 		CASE 
 			WHEN (sum(debitamt * .0001) - sum(creditamt * .0001)) = 0
 				THEN 'In Balance'
-			ELSE 'Out Of Balance: Amount ' || (sum(debitamt * .0001) - sum(creditamt * .0001))::VARCHAR
+			ELSE 'TLS-1362 Part Inv OOB'
 			END AS oob,
 		ba.businessactionid
 	FROM mabusinessactionitem bai
@@ -102,6 +102,43 @@ AS (
 			END AS txt,
 		*
 	FROM mabusinessactionerror
+	),
+erroraccropart
+AS (
+	SELECT ba.businessactionid
+	FROM serepairorderpart rp
+	INNER JOIN papart p ON p.partid = rp.partid
+	INNER JOIN serepairorderjob rj ON rj.repairorderjobid = rp.repairorderjobid
+	INNER JOIN serepairorderunit ru ON ru.repairorderunitid = rj.repairorderunitid
+	INNER JOIN serepairorder ro ON ro.repairorderid = ru.repairorderid
+	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
+	INNER JOIN cocategory c ON p.categoryid = c.categoryid
+	WHERE ba.STATUS = 2
+		AND rp.categoryid != p.categoryid
+	GROUP BY ba.businessactionid
+	),
+erroraccrolabor
+AS (
+	SELECT businessactionid
+	FROM serepairorderlabor rol
+	INNER JOIN serepairorderjob roj ON roj.repairorderjobid = rol.repairorderjobid
+	INNER JOIN serepairorderunit rou ON rou.repairorderunitid = roj.repairorderunitid
+	INNER JOIN serepairorder ro ON ro.repairorderid = rou.repairorderid
+	INNER JOIN cocategory badcat ON badcat.categoryid = rol.categoryid
+		AND badcat.storeid != rol.storeid
+	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
+	WHERE ba.STATUS = 2
+	GROUP BY businessactionid
+	),
+erroraccpicat
+AS (
+	SELECT ba.businessactionid
+	FROM mabusinessaction ba
+	INNER JOIN papartinvoiceline pi ON pi.partinvoiceid = ba.documentid
+	INNER JOIN cocategory c ON c.categoryid = pi.categoryid
+		AND c.storeid != pi.storeid
+	WHERE ba.STATUS = 2
+	GROUP BY ba.businessactionid
 	)
 SELECT ba.documentnumber,
 	doctype.doctype AS documenttype,
@@ -113,13 +150,31 @@ SELECT ba.documentnumber,
 		WHEN oob.oob IS NOT NULL
 			THEN oob.oob
 		ELSE 'N/A'
-		END AS balancestate
+		END AS balancestate,
+	CASE 
+		WHEN earop.businessactionid IS NOT NULL
+			THEN 'EVO-26911'
+		ELSE 'N/A'
+		END AS erroraccropartcat,
+	CASE 
+		WHEN earol.businessactionid IS NOT NULL
+			THEN 'EVO-18036'
+		ELSE 'N/A'
+		END AS erroraccrolaborcat,
+	CASE 
+		WHEN eapicat.businessactionid IS NOT NULL
+			THEN 'EVO-13570'
+		ELSE 'N/A'
+		END AS erroraccpilpartcat
 FROM mabusinessaction ba
 LEFT JOIN oob ON oob.businessactionid = ba.businessactionid
 LEFT JOIN doctype ON doctype.businessactionid = ba.businessactionid
 LEFT JOIN costore s ON s.storeid = ba.storeid
 LEFT JOIN errortxt ON errortxt.businessactionid = ba.businessactionid
 	AND num = 1
+LEFT JOIN erroraccropart earop ON earop.businessactionid = ba.businessactionid
+LEFT JOIN erroraccrolabor earol ON earol.businessactionid = ba.businessactionid
+LEFT JOIN erroraccpicat eapicat ON eapicat.businessactionid = ba.businessactionid
 WHERE ba.STATUS = 2
 ORDER BY s.storename ASC,
 	documentdate DESC
