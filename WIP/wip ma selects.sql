@@ -139,6 +139,40 @@ AS (
 		AND c.storeid != pi.storeid
 	WHERE ba.STATUS = 2
 	GROUP BY ba.businessactionid
+	),
+erroraccreceivepart
+AS (
+	SELECT businessactionid
+	FROM (
+		SELECT ba.businessactionid
+		FROM papartadjustment pa
+		INNER JOIN pareceivingdocument rd ON rd.receivingdocumentid = pa.receivingdocumentid
+		LEFT JOIN mabusinessaction ba ON ba.documentid = rd.receivingdocumentid
+		INNER JOIN papart p ON p.partid = pa.partid
+		INNER JOIN cocategory c ON p.categoryid = c.categoryid
+		WHERE ba.STATUS = 2
+			AND ba.documentid IS NOT NULL
+			AND c.isappmajorunit <> 1
+			AND c.isfisales <> 1
+		GROUP BY ba.businessactionid
+		
+		UNION
+		
+		SELECT ba.businessactionid
+		FROM papurchaseorder pa
+		INNER JOIN papartadjustment ph ON ph.referenceid = pa.purchaseorderid
+		INNER JOIN pareceivingdocument rd ON ph.receivingdocumentid = rd.receivingdocumentid
+		INNER JOIN papartshipment ps ON ps.partshipmentid = ph.partshipmentid
+		INNER JOIN papart p ON p.partid = ph.partid
+		INNER JOIN mabusinessaction ba ON rd.receivingdocumentid = ba.documentid
+		WHERE ba.STATUS = 2
+			AND (
+				rd.storeid != p.storeid
+				OR rd.storeidluid != p.storeidluid
+				)
+		GROUP BY ba.businessactionid
+		) AS subquery
+	GROUP BY businessactionid
 	)
 SELECT ba.documentnumber,
 	doctype.doctype AS documenttype,
@@ -165,7 +199,12 @@ SELECT ba.documentnumber,
 		WHEN eapicat.businessactionid IS NOT NULL
 			THEN 'EVO-13570'
 		ELSE 'N/A'
-		END AS erroraccpilpartcat
+		END AS erroraccpilpartcat,
+	CASE 
+		WHEN earpcat.businessactionid IS NOT NULL -- Error Accessing On Part Receiving Document
+			THEN 'EVO-31748'
+		ELSE 'N/A'
+		END AS erroraccrecvpart
 FROM mabusinessaction ba
 LEFT JOIN oob ON oob.businessactionid = ba.businessactionid
 LEFT JOIN doctype ON doctype.businessactionid = ba.businessactionid
@@ -175,6 +214,7 @@ LEFT JOIN errortxt ON errortxt.businessactionid = ba.businessactionid
 LEFT JOIN erroraccropart earop ON earop.businessactionid = ba.businessactionid
 LEFT JOIN erroraccrolabor earol ON earol.businessactionid = ba.businessactionid
 LEFT JOIN erroraccpicat eapicat ON eapicat.businessactionid = ba.businessactionid
+LEFT JOIN erroraccreceivepart earpcat ON earpcat.businessactionid = ba.businessactionid
 WHERE ba.STATUS = 2
 ORDER BY s.storename ASC,
 	documentdate DESC
