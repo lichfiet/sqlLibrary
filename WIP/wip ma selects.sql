@@ -1,4 +1,4 @@
-WITH doctype
+WITH maedata
 AS (
 	SELECT businessactionid,
 		CASE documenttype
@@ -69,7 +69,15 @@ AS (
 			WHEN - 1
 				THEN 'Unknown'
 			ELSE 'Invalid Document Type' -- Add this line to handle unknown values
-			END AS doctype
+			END AS doctype,
+		CASE 
+			WHEN STATUS = 2
+				THEN 'Erroneous'
+			WHEN STATUS = 4
+				THEN 'Pending'
+			ELSE 'Unknown'
+			END AS errorstatus,
+		LEFT((date_trunc('minute', documentdate))::VARCHAR, 16) AS docdate
 	FROM mabusinessaction ba
 	WHERE ba.STATUS = 2
 	),
@@ -90,6 +98,14 @@ AS (
 	WHERE ba.STATUS = 2
 	GROUP BY ba.businessactionid
 	),
+missingmae
+AS (
+	SELECT businessactionid
+	FROM mabusinessaction
+	WHERE storeid = 0
+		AND documentid = 0
+		AND STATUS = 2
+	),
 errortxt
 AS (
 	SELECT row_number() OVER (
@@ -102,6 +118,38 @@ AS (
 			END AS txt,
 		*
 	FROM mabusinessactionerror
+	),
+schedacctnotvalidar
+AS (
+	SELECT ma.businessactionid
+	FROM mabusinessaction ma
+	INNER JOIN mabusinessactionitem mai using (businessactionid)
+	INNER JOIN cocommoninvoice ci ON ci.invoicenumber::TEXT = ma.invoicenumber::TEXT
+	INNER JOIN cocommoninvoicepayment cip using (commoninvoiceid)
+	INNER JOIN (
+		SELECT CASE 
+				WHEN depositoption = 0
+					THEN bank_val
+				WHEN depositoption IN (1, 2)
+					THEN mop1.glacct
+				END AS mop_gl,
+			methodofpaymentid,
+			mop1.storeid
+		FROM comethodofpayment mop1
+		INNER JOIN (
+			SELECT value::BIGINT AS bank_val,
+				storeid
+			FROM copreference
+			WHERE id = 'shop-DefaultBankAcct'
+			) pref ON pref.storeid = mop1.storeid
+		) mop ON mop.methodofpaymentid = cip.methodofpaymentid
+		AND mop.storeid = ma.storeid
+	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = mop.mop_gl
+	WHERE STATUS = 2
+		AND coa.schedule = 0
+		AND cip.arcustomerid <> 0
+		AND cip.dtstamp > '2022-03-15 00:00:00.000'
+	GROUP BY ma.businessactionid
 	),
 erroraccropart
 AS (
@@ -173,10 +221,57 @@ AS (
 		GROUP BY ba.businessactionid
 		) AS subquery
 	GROUP BY businessactionid
+	),
+analysispending
+AS (
+	SELECT ba.businessactionid
+	FROM papartadjustment pa
+	INNER JOIN mabusinessaction ba ON ba.documentid = pa.receivingdocumentid
+	INNER JOIN (
+		SELECT max(partshipmentid) AS id,
+			supplierid
+		FROM papartshipment
+		GROUP BY supplierid
+		) cr ON cr.supplierid = pa.supplierid
+	LEFT JOIN papartshipment ps ON ps.partshipmentid = pa.partshipmentid
+	WHERE ps.partshipmentid IS NULL
+		AND ba.STATUS = 4
+		AND ba.documenttype = 1007
+	),
+invalidglnonpayro
+AS (
+	SELECT ma.businessactionid
+	FROM serepairorderjob roj
+	INNER JOIN serepairorderunit rou using (repairorderunitid)
+	INNER JOIN serepairorder ro using (repairorderid)
+	INNER JOIN cosaletype st ON st.saletypeid = roj.saletypeid
+	INNER JOIN mabusinessaction ma ON ma.documentid = ro.repairorderid
+	WHERE isnonpayjob = 1
+		AND st.usagecode NOT IN (5, 7)
+		AND ma.STATUS = 2
+	GROUP BY ma.businessactionid
+	),
+invalidgldealandinvoice
+AS (
+	SELECT b.businessactionid
+	FROM mabusinessaction b
+	LEFT JOIN sadealfinalization df ON df.dealfinalizationid = b.documentid
+	LEFT JOIN papartinvoice p ON p.partinvoiceid = b.documentid
+	INNER JOIN cocommoninvoice c ON c.documentid = df.dealid
+		OR c.documentid = p.partinvoiceid
+	INNER JOIN cocommoninvoicepayment ci ON ci.commoninvoiceid = c.commoninvoiceid
+	INNER JOIN comethodofpayment m ON m.methodofpaymentid = ci.methodofpaymentid
+	LEFT JOIN glchartofaccounts coa ON coa.acctdeptid = m.glacct
+	WHERE b.STATUS = 2
+		AND ci.description = ''
+		AND ci.amount != 0
+		AND coa.acctdeptid IS NULL
+	GROUP BY b.businessactionid
 	)
 SELECT ba.documentnumber,
-	doctype.doctype AS documenttype,
-	LEFT((date_trunc('minute', documentdate))::VARCHAR, 16) AS DATE,
+	maedata.doctype AS documenttype,
+	maedata.errorstatus AS STATUS,
+	maedata.docdate AS DATE,
 	errortxt.txt AS errormessage,
 	s.storename,
 	'-->' AS errorchecks,
@@ -185,6 +280,16 @@ SELECT ba.documentnumber,
 			THEN oob.oob
 		ELSE 'N/A'
 		END AS balancestate,
+	CASE 
+		WHEN missingmae.businessactionid IS NOT NULL
+			THEN 'EVO-20030'
+		ELSE 'N/A'
+		END AS missingmaefromfrontend,
+	CASE 
+		WHEN schedacctnotvalidar.businessactionid IS NOT NULL
+			THEN 'EVO-38097'
+		ELSE 'N/A'
+		END AS schedacctnotvalidar,
 	CASE 
 		WHEN earop.businessactionid IS NOT NULL
 			THEN 'EVO-26911'
@@ -204,17 +309,37 @@ SELECT ba.documentnumber,
 		WHEN earpcat.businessactionid IS NOT NULL -- Error Accessing On Part Receiving Document
 			THEN 'EVO-31748'
 		ELSE 'N/A'
-		END AS erroraccrecvpart
+		END AS erroraccrecvpart,
+	CASE 
+		WHEN analysispending.businessactionid IS NOT NULL -- Analysis Pending On Part Receiving Document
+			THEN 'EVO-34741'
+		ELSE 'N/A'
+		END AS analysispending,
+	CASE 
+		WHEN invalidglnonpayro.businessactionid IS NOT NULL -- Invalid GL For Non-Pay Job on Repair Order
+			THEN 'EVO-34114'
+		ELSE 'N/A'
+		END AS invalidglnonpayro,
+	CASE 
+		WHEN invalidgldealandinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
+			THEN 'EVO-35010'
+		ELSE 'N/A'
+		END AS invalidgldealandinvoice
 FROM mabusinessaction ba
 LEFT JOIN oob ON oob.businessactionid = ba.businessactionid
-LEFT JOIN doctype ON doctype.businessactionid = ba.businessactionid
+LEFT JOIN maedata ON maedata.businessactionid = ba.businessactionid
 LEFT JOIN costore s ON s.storeid = ba.storeid
 LEFT JOIN errortxt ON errortxt.businessactionid = ba.businessactionid
 	AND num = 1
-LEFT JOIN erroraccropart earop ON earop.businessactionid = ba.businessactionid
-LEFT JOIN erroraccrolabor earol ON earol.businessactionid = ba.businessactionid
-LEFT JOIN erroraccpicat eapicat ON eapicat.businessactionid = ba.businessactionid
+LEFT JOIN erroraccropart earop ON earop.businessactionid = ba.businessactionid -- EVO-26911 RO Part with Bad Categoryid
+LEFT JOIN erroraccrolabor earol ON earol.businessactionid = ba.businessactionid -- EVO-18036 RO Labor with Bad Categoryid
+LEFT JOIN erroraccpicat eapicat ON eapicat.businessactionid = ba.businessactionid -- EVO-13570 Part Invoice Line with Bad Categoryid
 LEFT JOIN erroraccreceivepart earpcat ON earpcat.businessactionid = ba.businessactionid
+LEFT JOIN missingmae ON missingmae.businessactionid = ba.businessactionid
+LEFT JOIN analysispending ON analysispending.businessactionid = ba.businessactionid
+LEFT JOIN invalidglnonpayro ON invalidglnonpayro.businessactionid = ba.businessactionid
+LEFT JOIN invalidgldealandinvoice ON invalidgldealandinvoice.businessactionid = ba.businessactionid
+LEFT JOIN schedacctnotvalidar ON schedacctnotvalidar.businessactionid = ba.businessactionid
 WHERE ba.STATUS = 2
 ORDER BY s.storename ASC,
 	documentdate DESC
