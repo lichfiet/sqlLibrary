@@ -1,15 +1,20 @@
+/* This CTE is used to defined common information for other CTEs and the base select query that 
+references them. It includes the storeid to limit results in other CTEs, as well as the packing 
+slip so both value can be changed inside only one section of the SQL*/
 WITH data
 AS (
 	SELECT /* Change Me -> */ '123456' /* <- Change Me */ AS packingslip,
 		/* Change Me -> */ 1 /* <- Change Me */ AS storeid
 	),
 ps
+	/* This CTE selects information from papartshipment */
 AS (
 	SELECT ps.packingslip AS packingslipnum,
-	ps.storeid AS psstoreid,
+		ps.storeid AS psstoreid,
 		*
 	FROM papartshipment ps
 	INNER JOIN data ON data.packingslip = ps.packingslip
+		AND data.storeid = ps.storeid
 	),
 totalreceived
 AS (
@@ -25,9 +30,9 @@ AS (
 	SELECT purchaseorderlineid,
 		ROUND(SUM(((incomingqty) - (outgoingqty)) * .0001), 2) AS totalreceived
 	FROM paparthistory ph
-	INNER JOIN data on data.storeid = ph.storeid
+	INNER JOIN data ON data.storeid = ph.storeid
 	LEFT JOIN ps ON ps.partshipmentid = ph.partshipmentid
-	    AND ps.psstoreid = ph.storeid
+		AND ps.psstoreid = ph.storeid
 	WHERE initiatingaction = 8
 		AND ps.partshipmentid IS NULL
 	GROUP BY purchaseorderlineid
@@ -62,7 +67,7 @@ GROUP BY p.partnumber,
 	ps.packingslipnum,
 	tr.totalreceived,
 	roos.totalreceived
-ORDER BY (
+ORDER BY /* Order by whether all of the parts have been unreceived or not, and then by part number*/ (
 		CASE 
 			WHEN SUM(((incomingqty) - (outgoingqty)) * .0001) = 0
 				THEN 1
