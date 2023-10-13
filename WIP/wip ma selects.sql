@@ -373,6 +373,7 @@ SELECT ba.documentnumber,
 			THEN 'EVO-38097'
 		ELSE 'N/A'
 		END AS schedacctnotvalidar,
+	'ERROR ACCESSING XXX -->' AS erroraccesing,
 	CASE 
 		WHEN earop.businessactionid IS NOT NULL
 			THEN 'EVO-26911'
@@ -393,6 +394,7 @@ SELECT ba.documentnumber,
 			THEN 'EVO-31748'
 		ELSE 'N/A'
 		END AS erroraccrecvpart,
+	'<--' AS erroraccessing,
 	CASE 
 		WHEN analysispending.businessactionid IS NOT NULL -- Analysis Pending On Part Receiving Document
 			THEN 'EVO-34741'
