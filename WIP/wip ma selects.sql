@@ -284,6 +284,22 @@ AS (
 		AND t2.taxid IS NULL
 	GROUP BY ba.businessactionid
 	),
+taxiddeal1
+AS (
+	SELECT ba.businessactionid
+	FROM sadealunittax dut
+	LEFT JOIN cotax t ON t.taxid = dut.taxentityid
+	INNER JOIN cotaxcategory tc ON tc.taxcategorydescription = dut.taxcategorydescription
+	INNER JOIN cotax t2 ON t2.taxcategoryid = tc.taxcategoryid
+	INNER JOIN sadealunit du on du.dealunitid = dut.dealunitid
+	INNER JOIN sadeal d on d.dealid = du.dealid
+	INNER JOIN sadealfinalization f on f.dealid = d.dealid
+	INNER JOIN mabusinessaction ba on ba.documentid = f.dealfinalizationid
+	WHERE t.taxid IS NULL
+		AND tc.storeid = dut.storeid
+		AND ba.status = 2
+	GROUP BY ba.businessactionid
+),
 dupepartinvoice
 AS (
 	SELECT ba.businessactionid
@@ -411,7 +427,7 @@ SELECT ba.documentnumber,
 		ELSE 'N/A'
 		END AS invalidgldealandinvoice,
 	CASE 
-		WHEN taxidrental.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
+		WHEN taxidrental.businessactionid IS NOT NULL -- Rental Reservation with bad taxid
 			THEN 'EVO-12777'
 		ELSE 'N/A'
 		END AS taxidrental,
@@ -440,7 +456,8 @@ LEFT JOIN analysispending ON analysispending.businessactionid = ba.businessactio
 LEFT JOIN invalidglnonpayro ON invalidglnonpayro.businessactionid = ba.businessactionid
 LEFT JOIN invalidgldealandinvoice ON invalidgldealandinvoice.businessactionid = ba.businessactionid
 LEFT JOIN schedacctnotvalidar ON schedacctnotvalidar.businessactionid = ba.businessactionid
-LEFT JOIN taxidrental ON taxidrental.businessactionid = ba.businessactionid
+LEFT JOIN taxidrental ON taxidrental.businessactionid = ba.businessactionid -- EVO-12777 Rental Reservation with bad rental posting taxid
+LEFT JOIN taxiddeal1 ON taxiddeal1.businessactionid = ba.businessactionid -- EVO-9836 Deal Unit tax with bad taxentityid
 LEFT JOIN dupepartinvoice ON dupepartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid
 WHERE ba.STATUS = 2
