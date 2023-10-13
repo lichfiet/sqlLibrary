@@ -267,6 +267,22 @@ AS (
 		AND ci.amount != 0
 		AND coa.acctdeptid IS NULL
 	GROUP BY b.businessactionid
+	),
+taxidrental
+AS (
+	SELECT ba.businessactionid
+	FROM rerentalpostingtaxdetail rptd
+	INNER JOIN rerentalpostingtax rpt ON rpt.rentalpostingtaxid = rptd.rentalpostingtaxid
+	INNER JOIN rerentalpostingitem rpi ON rpi.rentalpostingid = rpt.rentalpostingid
+	INNER JOIN rerentalposting rp ON rp.rentalpostingid = rpi.rentalpostingid
+	INNER JOIN mabusinessaction ba ON ba.documentnumber = rp.documentnumber
+	INNER JOIN cotaxcategory tc ON tc.taxcategorydescription = rpt.description
+		AND tc.storeid = rpt.storeid
+	INNER JOIN cotax t ON t.taxcategoryid = tc.taxcategoryid
+	LEFT JOIN cotax t2 ON t2.taxid = rptd.taxentityid
+	WHERE ba.STATUS = 2
+		AND t2.taxid IS NULL
+	GROUP BY ba.businessactionid
 	)
 SELECT ba.documentnumber,
 	maedata.doctype AS documenttype,
@@ -301,7 +317,7 @@ SELECT ba.documentnumber,
 		ELSE 'N/A'
 		END AS erroraccrolaborcat,
 	CASE 
-		WHEN eapicat.businessactionid IS NOT NULL
+		WHEN eapicat.businessactionid IS NOT NULL -- Error Accessing on Part Invoice // Verified Diag To Work
 			THEN 'EVO-13570'
 		ELSE 'N/A'
 		END AS erroraccpilpartcat,
@@ -324,7 +340,12 @@ SELECT ba.documentnumber,
 		WHEN invalidgldealandinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
 			THEN 'EVO-35010'
 		ELSE 'N/A'
-		END AS invalidgldealandinvoice
+		END AS invalidgldealandinvoice,
+	CASE 
+		WHEN taxidrental.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
+			THEN 'EVO-12777'
+		ELSE 'N/A'
+		END AS taxidrental
 FROM mabusinessaction ba
 LEFT JOIN oob ON oob.businessactionid = ba.businessactionid
 LEFT JOIN maedata ON maedata.businessactionid = ba.businessactionid
@@ -334,12 +355,13 @@ LEFT JOIN errortxt ON errortxt.businessactionid = ba.businessactionid
 LEFT JOIN erroraccropart earop ON earop.businessactionid = ba.businessactionid -- EVO-26911 RO Part with Bad Categoryid
 LEFT JOIN erroraccrolabor earol ON earol.businessactionid = ba.businessactionid -- EVO-18036 RO Labor with Bad Categoryid
 LEFT JOIN erroraccpicat eapicat ON eapicat.businessactionid = ba.businessactionid -- EVO-13570 Part Invoice Line with Bad Categoryid
-LEFT JOIN erroraccreceivepart earpcat ON earpcat.businessactionid = ba.businessactionid
+LEFT JOIN erroraccreceivepart earpcat ON earpcat.businessactionid = ba.businessactionid -- EVO-31748 Part Receiving Doc with Bad Categoryid
 LEFT JOIN missingmae ON missingmae.businessactionid = ba.businessactionid
 LEFT JOIN analysispending ON analysispending.businessactionid = ba.businessactionid
 LEFT JOIN invalidglnonpayro ON invalidglnonpayro.businessactionid = ba.businessactionid
 LEFT JOIN invalidgldealandinvoice ON invalidgldealandinvoice.businessactionid = ba.businessactionid
 LEFT JOIN schedacctnotvalidar ON schedacctnotvalidar.businessactionid = ba.businessactionid
+LEFT JOIN taxidrental ON taxidrental.businessactionid = ba.businessactionid
 WHERE ba.STATUS = 2
 ORDER BY s.storename ASC,
 	documentdate DESC
