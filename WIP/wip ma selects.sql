@@ -291,15 +291,36 @@ AS (
 	LEFT JOIN cotax t ON t.taxid = dut.taxentityid
 	INNER JOIN cotaxcategory tc ON tc.taxcategorydescription = dut.taxcategorydescription
 	INNER JOIN cotax t2 ON t2.taxcategoryid = tc.taxcategoryid
-	INNER JOIN sadealunit du on du.dealunitid = dut.dealunitid
-	INNER JOIN sadeal d on d.dealid = du.dealid
-	INNER JOIN sadealfinalization f on f.dealid = d.dealid
-	INNER JOIN mabusinessaction ba on ba.documentid = f.dealfinalizationid
+	INNER JOIN sadealunit du ON du.dealunitid = dut.dealunitid
+	INNER JOIN sadeal d ON d.dealid = du.dealid
+	INNER JOIN sadealfinalization f ON f.dealid = d.dealid
+	INNER JOIN mabusinessaction ba ON ba.documentid = f.dealfinalizationid
 	WHERE t.taxid IS NULL
 		AND tc.storeid = dut.storeid
-		AND ba.status = 2
+		AND ba.STATUS = 2
 	GROUP BY ba.businessactionid
-),
+	),
+taxidpartinvoice1
+AS (
+	SELECT ba.businessactionid
+	FROM mabusinessaction ba
+	INNER JOIN papartinvoice pi ON pi.partinvoiceid = ba.documentid
+	INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
+	INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
+	LEFT JOIN cotax t ON t.taxid = pite.taxentityid
+	LEFT JOIN cotax t1 ON t1.taxcategoryid = piti.taxcategoryid
+	INNER JOIN cotaxcategory ct ON ct.taxcategoryid = piti.taxcategoryid
+	WHERE ba.STATUS = 2
+		AND t1.taxid <> t.taxid
+		AND t1.description = t.description
+		AND t1.taxid <> pite.taxentityid
+		AND ct.taxcategoryid = t1.taxcategoryid
+		OR (
+			ba.STATUS = 2
+			AND pite.taxentityid IS NULL
+			)
+	GROUP BY ba.businessactionid
+	),
 dupepartinvoice
 AS (
 	SELECT ba.businessactionid
@@ -432,6 +453,11 @@ SELECT ba.documentnumber,
 		ELSE 'N/A'
 		END AS taxidrental,
 	CASE 
+		WHEN taxidpartinvoice1.businessactionid IS NOT NULL -- Rental Reservation with bad taxid
+			THEN 'EVO-35995'
+		ELSE 'N/A'
+		END AS taxidpartinvoice1,
+	CASE 
 		WHEN dupepartinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
 			THEN 'EVO-36594'
 		ELSE 'N/A'
@@ -447,6 +473,7 @@ LEFT JOIN maedata ON maedata.businessactionid = ba.businessactionid
 LEFT JOIN costore s ON s.storeid = ba.storeid
 LEFT JOIN errortxt ON errortxt.businessactionid = ba.businessactionid
 	AND num = 1
+-- Start joins on CTEs 
 LEFT JOIN erroraccropart earop ON earop.businessactionid = ba.businessactionid -- EVO-26911 RO Part with Bad Categoryid
 LEFT JOIN erroraccrolabor earol ON earol.businessactionid = ba.businessactionid -- EVO-18036 RO Labor with Bad Categoryid
 LEFT JOIN erroraccpicat eapicat ON eapicat.businessactionid = ba.businessactionid -- EVO-13570 Part Invoice Line with Bad Categoryid
@@ -458,6 +485,7 @@ LEFT JOIN invalidgldealandinvoice ON invalidgldealandinvoice.businessactionid = 
 LEFT JOIN schedacctnotvalidar ON schedacctnotvalidar.businessactionid = ba.businessactionid
 LEFT JOIN taxidrental ON taxidrental.businessactionid = ba.businessactionid -- EVO-12777 Rental Reservation with bad rental posting taxid
 LEFT JOIN taxiddeal1 ON taxiddeal1.businessactionid = ba.businessactionid -- EVO-9836 Deal Unit tax with bad taxentityid
+LEFT JOIN taxidpartinvoice1 ON taxidpartinvoice1.businessactionid = ba.businessactionid -- EVO-35995 Part Invoice with bas taxentityid
 LEFT JOIN dupepartinvoice ON dupepartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid
 WHERE ba.STATUS = 2
