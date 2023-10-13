@@ -283,6 +283,73 @@ AS (
 	WHERE ba.STATUS = 2
 		AND t2.taxid IS NULL
 	GROUP BY ba.businessactionid
+	),
+dupepartinvoice
+AS (
+	SELECT ba.businessactionid
+	FROM paparthistory h
+	INNER JOIN papartinvoice i ON h.partinvoiceid = i.partinvoiceid
+	INNER JOIN mabusinessaction ba ON ba.documentid = i.partinvoiceid
+		AND ba.STATUS = 2
+	INNER JOIN papartinvoiceline il ON h.partinvoicelineid = il.partinvoicelineid
+	WHERE il.partinvoiceid <> h.partinvoiceid
+	GROUP BY ba.businessactionid
+	),
+oobmissingdiscountpartinvoice
+AS (
+	SELECT businessactionid
+	FROM (
+		SELECT ba.businessactionid
+		FROM papartinvoiceline pi
+		INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
+		INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
+		INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
+		INNER JOIN mabusinessaction ba ON ba.documentid = pi.partinvoiceid
+		INNER JOIN (
+			SELECT pi.partinvoiceid
+			FROM papartinvoice pi
+			INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
+			INNER JOIN (
+				SELECT SUM((qtyspecialorder * adjustmentprice) / 10000) AS amt,
+					partinvoiceid
+				FROM papartinvoiceline
+				GROUP BY partinvoiceid
+				) soamt ON soamt.partinvoiceid = pi.partinvoiceid
+			WHERE pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
+			) v1 ON v1.partinvoiceid = pi.partinvoiceid
+		INNER JOIN (
+			SELECT SUM(debitamt - creditamt) AS oob,
+				bai.businessactionid
+			FROM mabusinessactionitem bai
+			INNER JOIN mabusinessaction ba ON ba.businessactionid = bai.businessactionid
+			WHERE ba.documenttype = 1001
+				AND ba.STATUS = 2
+			GROUP BY bai.businessactionid
+			) oob ON oob.businessactionid = ba.businessactionid
+		INNER JOIN (
+			SELECT SUM(depositapplied) AS applied,
+				partinvoiceid
+			FROM papartinvoiceline
+			GROUP BY partinvoiceid
+			) dep ON dep.partinvoiceid = pi.partinvoiceid
+		INNER JOIN (
+			SELECT pi.partinvoiceid
+			FROM papartinvoice pi
+			INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
+			INNER JOIN (
+				SELECT sum((qtyspecialorder * adjustmentprice) / 10000) AS amt,
+					partinvoiceid
+				FROM papartinvoiceline
+				GROUP BY partinvoiceid
+				) soamt ON soamt.partinvoiceid = pi.partinvoiceid
+				AND pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
+			) soa ON soa.partinvoiceid = pi.partinvoiceid
+		WHERE ba.documenttype = 1001
+			AND ba.STATUS = 2
+			AND dep.applied <> oob.oob
+		GROUP BY ba.businessactionid
+		) data
+	GROUP BY businessactionid
 	)
 SELECT ba.documentnumber,
 	maedata.doctype AS documenttype,
@@ -345,7 +412,17 @@ SELECT ba.documentnumber,
 		WHEN taxidrental.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
 			THEN 'EVO-12777'
 		ELSE 'N/A'
-		END AS taxidrental
+		END AS taxidrental,
+	CASE 
+		WHEN dupepartinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
+			THEN 'EVO-36594'
+		ELSE 'N/A'
+		END AS dupepartinvoice,
+	CASE 
+		WHEN oobmissingdiscountpartinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
+			THEN 'EVO-20828'
+		ELSE 'N/A'
+		END AS invoicemissingdiscount
 FROM mabusinessaction ba
 LEFT JOIN oob ON oob.businessactionid = ba.businessactionid
 LEFT JOIN maedata ON maedata.businessactionid = ba.businessactionid
@@ -362,6 +439,8 @@ LEFT JOIN invalidglnonpayro ON invalidglnonpayro.businessactionid = ba.businessa
 LEFT JOIN invalidgldealandinvoice ON invalidgldealandinvoice.businessactionid = ba.businessactionid
 LEFT JOIN schedacctnotvalidar ON schedacctnotvalidar.businessactionid = ba.businessactionid
 LEFT JOIN taxidrental ON taxidrental.businessactionid = ba.businessactionid
+LEFT JOIN dupepartinvoice ON dupepartinvoice.businessactionid = ba.businessactionid
+LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid
 WHERE ba.STATUS = 2
 ORDER BY s.storename ASC,
 	documentdate DESC
