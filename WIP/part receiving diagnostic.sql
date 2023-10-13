@@ -1,14 +1,22 @@
-WITH ps
+WITH data
 AS (
-	SELECT *
-	FROM papartshipment
-	WHERE packingslip = '7003565365'
+	SELECT /* Change Me -> */ '123456' /* <- Change Me */ AS packingslip,
+		/* Change Me -> */ 1 /* <- Change Me */ AS storeid
+	),
+ps
+AS (
+	SELECT ps.packingslip AS packingslipnum,
+	ps.storeid AS psstoreid,
+		*
+	FROM papartshipment ps
+	INNER JOIN data ON data.packingslip = ps.packingslip
 	),
 totalreceived
 AS (
 	SELECT purchaseorderlineid,
 		ROUND(SUM(((incomingqty) - (outgoingqty)) * .0001), 2) AS totalreceived
-	FROM paparthistory
+	FROM paparthistory ph
+	INNER JOIN data ON data.storeid = ph.storeid
 	WHERE initiatingaction = 8
 	GROUP BY purchaseorderlineid
 	),
@@ -17,7 +25,9 @@ AS (
 	SELECT purchaseorderlineid,
 		ROUND(SUM(((incomingqty) - (outgoingqty)) * .0001), 2) AS totalreceived
 	FROM paparthistory ph
+	INNER JOIN data on data.storeid = ph.storeid
 	LEFT JOIN ps ON ps.partshipmentid = ph.partshipmentid
+	    AND ps.psstoreid = ph.storeid
 	WHERE initiatingaction = 8
 		AND ps.partshipmentid IS NULL
 	GROUP BY purchaseorderlineid
@@ -36,8 +46,9 @@ SELECT p.partnumber,
 			THEN tr.totalreceived - roos.totalreceived
 		ELSE tr.totalreceived - ROUND(SUM(((incomingqty) - (outgoingqty)) * .0001), 2)
 		END AS newreceivedqty,
-	ps.packingslip
+	ps.packingslipnum
 FROM paparthistory ph
+INNER JOIN data ON data.storeid = ph.storeid
 INNER JOIN pareceivingdocument rd ON rd.receivingdocumentid = ph.receivingdocumentid
 INNER JOIN papurchaseorder po ON po.purchaseorderid = ph.purchaseorderid
 INNER JOIN ps ON ps.partshipmentid = rd.partshipmentid
@@ -48,7 +59,7 @@ WHERE initiatingaction = 8
 GROUP BY p.partnumber,
 	po.purchaseordernumber,
 	ph.purchaseorderlineid,
-	ps.packingslip,
+	ps.packingslipnum,
 	tr.totalreceived,
 	roos.totalreceived
 ORDER BY (
