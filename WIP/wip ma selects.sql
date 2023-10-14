@@ -247,7 +247,7 @@ AS (
 		) AS subquery
 	GROUP BY businessactionid
 	),
-analysispending
+analysispending -- verified to work at least once 
 AS (
 	SELECT ba.businessactionid
 	FROM papartadjustment pa
