@@ -221,12 +221,10 @@ AS (
 		FROM papartadjustment pa
 		INNER JOIN pareceivingdocument rd ON rd.receivingdocumentid = pa.receivingdocumentid
 		LEFT JOIN mabusinessaction ba ON ba.documentid = rd.receivingdocumentid
-		INNER JOIN papart p ON p.partid = pa.partid
-		INNER JOIN cocategory c ON p.categoryid = c.categoryid
+		INNER JOIN cocategory c ON pa.categoryid = c.categoryid
 		WHERE ba.STATUS = 2
 			AND ba.documentid IS NOT NULL
-			AND c.isappmajorunit <> 1
-			AND c.isfisales <> 1
+			AND c.storeid != pa.storeid
 		GROUP BY ba.businessactionid
 		
 		UNION
@@ -257,6 +255,19 @@ AS (
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = c.glinventory
 	WHERE coa.schedule != 0
 		AND ba.STATUS = 2
+	GROUP BY ba.businessactionid
+	
+	UNION
+	
+	SELECT ba.businessactionid
+	FROM papartadjustment pa
+	INNER JOIN pareceivingdocument rd ON rd.receivingdocumentid = pa.receivingdocumentid
+	INNER JOIN cocategory c ON c.categoryid = pa.categoryid
+	INNER JOIN mabusinessaction ba ON ba.documentid = rd.receivingdocumentid
+	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = c.glinventory
+	WHERE coa.schedule != 0
+		AND ba.STATUS = 2
+	GROUP BY ba.businessactionid
 	),
 analysispending -- verified to work at least once 
 AS (
