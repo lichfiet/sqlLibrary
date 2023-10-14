@@ -342,6 +342,15 @@ AS (
 		AND d.finalizedate > '2018-10-01'
 	GROUP BY ba.businessactionid
 	),
+tradedealid
+AS (
+	SELECT businessactionid
+	FROM mabusinessaction ba
+	LEFT JOIN sadealtrade dt ON dt.dealtradeid = ba.documentid
+	WHERE ba.STATUS = 2
+		AND documenttype = 3007
+		AND dt.dealtradeid IS NULL
+	),
 dupepartinvoice
 AS (
 	SELECT ba.businessactionid
@@ -483,16 +492,21 @@ SELECT ba.documentnumber,
 			THEN 'EVO-12777'
 		ELSE 'N/A'
 		END AS taxidrental,
-	CASE
-	    WHEN taxiddeal1.businessactionid IS NOT NULL -- Deal with bad taxid linked to diff store
-	        THEN 'EVO-9836'
-	    ELSE 'N/A'
-	END AS invaliddealunittax,
-	CASE
-	    WHEN taxiddeal2.businessactionid IS NOT NULL -- Deal with bad taxid linked to diff store
-	        THEN 'EVO-26472'
-	    ELSE 'N/A'
-	END AS errorupdatingacctg,
+	CASE 
+		WHEN taxiddeal1.businessactionid IS NOT NULL -- Deal with bad taxid linked to diff store
+			THEN 'EVO-9836'
+		ELSE 'N/A'
+		END AS invaliddealunittax,
+	CASE 
+		WHEN taxiddeal2.businessactionid IS NOT NULL -- Deal with bad taxid linked to diff store
+			THEN 'EVO-26472'
+		ELSE 'N/A'
+		END AS errorupdatingacctg,
+	CASE 
+		WHEN tradedealid.businessactionid IS NOT NULL -- Deal with bad taxid linked to diff store
+			THEN 'EVO-22520'
+		ELSE 'N/A'
+		END AS tradedealid,
 	CASE 
 		WHEN dupepartinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
 			THEN 'EVO-36594'
@@ -522,7 +536,8 @@ LEFT JOIN schedacctnotvalidar ON schedacctnotvalidar.businessactionid = ba.busin
 LEFT JOIN miscinvnonarmop ON miscinvnonarmop.businessactionid = ba.businessactionid -- EVO-33866 AR Sched Invalid for Misc Receipt
 LEFT JOIN taxidrental ON taxidrental.businessactionid = ba.businessactionid -- EVO-12777 Rental Reservation with bad rental posting taxid
 LEFT JOIN taxiddeal1 ON taxiddeal1.businessactionid = ba.businessactionid -- EVO-9836 Deal Unit tax with invalid taxentityid
-LEFT JOIN taxiddeal2 on taxiddeal2.businessactionid = ba.businessactionid -- EVO-26472 Deal Unit Tax with taxentityid from other store
+LEFT JOIN taxiddeal2 ON taxiddeal2.businessactionid = ba.businessactionid -- EVO-26472 Deal Unit Tax with taxentityid from other store
+LEFT JOIN tradedealid ON tradedealid.businessactionid = ba.businessactionid -- EVO-22520 Deal Trade MAE with invalid tradedealid
 LEFT JOIN dupepartinvoice ON dupepartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid
 WHERE ba.STATUS = 2
