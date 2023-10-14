@@ -198,11 +198,11 @@ AS (
 	SELECT ba.businessactionid
 	FROM serepairorder ro
 	INNER JOIN cosaletype st ON st.saletypeid = ro.miscitemsaletypeid
-	    AND ro.storeid != st.storeid
+		AND ro.storeid != st.storeid
 	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
 	WHERE ba.STATUS = 2
 	GROUP BY ba.businessactionid
-),
+	),
 erroraccpicat
 AS (
 	SELECT ba.businessactionid
@@ -323,6 +323,23 @@ AS (
 	WHERE t.taxid IS NULL
 		AND tc.storeid = dut.storeid
 		AND ba.STATUS = 2
+	GROUP BY ba.businessactionid
+	),
+taxiddeal2 -- verified it works on two deals
+AS (
+	SELECT ba.businessactionid
+	FROM sadeal d
+	INNER JOIN sadealunit du ON du.dealid = d.dealid
+	INNER JOIN sadealunittax dut ON dut.dealunitid = du.dealunitid
+	INNER JOIN cotax t ON t.taxid = dut.taxentityid
+	INNER JOIN cotax t1 ON t1.description ilike dut.taxdescription
+		AND t1.storeid = dut.storeid
+	INNER JOIN cotaxcategory tc ON tc.taxcategoryid = t1.taxcategoryid
+	INNER JOIN sadealfinalization df ON df.dealid = d.dealid
+	INNER JOIN mabusinessaction ba ON ba.documentid = df.dealfinalizationid
+	WHERE ba.STATUS = 2
+		AND t.storeid <> d.storeid
+		AND d.finalizedate > '2018-10-01'
 	GROUP BY ba.businessactionid
 	),
 dupepartinvoice
@@ -466,6 +483,16 @@ SELECT ba.documentnumber,
 			THEN 'EVO-12777'
 		ELSE 'N/A'
 		END AS taxidrental,
+	CASE
+	    WHEN taxiddeal1.businessactionid IS NOT NULL -- Deal with bad taxid linked to diff store
+	        THEN 'EVO-9836'
+	    ELSE 'N/A'
+	END AS invaliddealunittax,
+	CASE
+	    WHEN taxiddeal2.businessactionid IS NOT NULL -- Deal with bad taxid linked to diff store
+	        THEN 'EVO-26472'
+	    ELSE 'N/A'
+	END AS errorupdatingacctg,
 	CASE 
 		WHEN dupepartinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
 			THEN 'EVO-36594'
@@ -494,7 +521,8 @@ LEFT JOIN invalidgldealandinvoice ON invalidgldealandinvoice.businessactionid = 
 LEFT JOIN schedacctnotvalidar ON schedacctnotvalidar.businessactionid = ba.businessactionid -- EVO-38907 AR Sched Acct not valid for MOP
 LEFT JOIN miscinvnonarmop ON miscinvnonarmop.businessactionid = ba.businessactionid -- EVO-33866 AR Sched Invalid for Misc Receipt
 LEFT JOIN taxidrental ON taxidrental.businessactionid = ba.businessactionid -- EVO-12777 Rental Reservation with bad rental posting taxid
-LEFT JOIN taxiddeal1 ON taxiddeal1.businessactionid = ba.businessactionid -- EVO-9836 Deal Unit tax with bad taxentityid
+LEFT JOIN taxiddeal1 ON taxiddeal1.businessactionid = ba.businessactionid -- EVO-9836 Deal Unit tax with invalid taxentityid
+LEFT JOIN taxiddeal2 on taxiddeal2.businessactionid = ba.businessactionid -- EVO-26472 Deal Unit Tax with taxentityid from other store
 LEFT JOIN dupepartinvoice ON dupepartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid
 WHERE ba.STATUS = 2
