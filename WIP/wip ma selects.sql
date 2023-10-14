@@ -177,7 +177,7 @@ AS (
 	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
 	INNER JOIN cocategory c ON p.categoryid = c.categoryid
 	WHERE ba.STATUS = 2
-		AND rp.categoryid != p.categoryid
+		AND c.storeid != rp.storeid
 	GROUP BY ba.businessactionid
 	),
 erroraccrolabor
