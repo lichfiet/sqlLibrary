@@ -119,7 +119,7 @@ GROUP BY coa.acctdept,
 HAVING count(b.fiscalyear) > 1;
 
 /*glbalance entries with a storeid not valid with costoremap*/
-SELECT 'gl balance entry with invalid store, check output 15 as potential cause' AS description,
+SELECT 'gl balance entry with invalid store, check output 4 as potential cause' AS description,
 	glbalancesid,
 	coa.acctdept,
 	b.fiscalyear
