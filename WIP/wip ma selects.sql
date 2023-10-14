@@ -304,6 +304,7 @@ AS (
 	FROM mabusinessaction b
 	LEFT JOIN sadealfinalization df ON df.dealfinalizationid = b.documentid
 	LEFT JOIN papartinvoice p ON p.partinvoiceid = b.documentid
+	    AND p.invoicetype NOT IN (2, 3)
 	INNER JOIN cocommoninvoice c ON c.documentid = df.dealid
 		OR c.documentid = p.partinvoiceid
 		OR c.commoninvoiceid = b.documentid
@@ -312,7 +313,6 @@ AS (
 	WHERE b.STATUS = 2
 		AND ci.description = ''
 		AND mop.description = ''
-		AND p.invoicetype NOT IN (2,3)
 	GROUP BY b.businessactionid
 	),
 taxidrental
