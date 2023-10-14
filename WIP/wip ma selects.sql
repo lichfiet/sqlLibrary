@@ -90,7 +90,7 @@ AS (
 		CASE 
 			WHEN (sum(debitamt * .0001) - sum(creditamt * .0001)) = 0
 				THEN 'In Balance'
-			ELSE 'TLS-1362 Part Inv OOB'
+			ELSE 'Out of Balance!'
 			END AS oob,
 		ba.businessactionid
 	FROM mabusinessactionitem bai
@@ -351,16 +351,16 @@ AS (
 		AND documenttype = 3007
 		AND dt.dealtradeid IS NULL
 	),
-dupepartinvoice
+oobdupepartinvoice
 AS (
 	SELECT ba.businessactionid
 	FROM paparthistory h
 	INNER JOIN papartinvoice i ON h.partinvoiceid = i.partinvoiceid
-	INNER JOIN mabusinessaction ba ON ba.documentid = i.partinvoiceid
-		AND ba.STATUS = 2
 	INNER JOIN papartinvoiceline il ON h.partinvoicelineid = il.partinvoicelineid
+	LEFT JOIN paspecialorder so ON so.partinvoiceid = h.partinvoiceid
+	INNER JOIN mabusinessaction ba ON ba.documentid = h.partinvoiceid
 	WHERE il.partinvoiceid <> h.partinvoiceid
-	GROUP BY ba.businessactionid
+		AND ba.STATUS = 2
 	),
 oobmissingdiscountpartinvoice
 AS (
@@ -508,10 +508,10 @@ SELECT ba.documentnumber,
 		ELSE 'N/A'
 		END AS tradedealid,
 	CASE 
-		WHEN dupepartinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
+		WHEN oobdupepartinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
 			THEN 'EVO-36594'
 		ELSE 'N/A'
-		END AS dupepartinvoice,
+		END AS oobdupepartinvoice,
 	CASE 
 		WHEN oobmissingdiscountpartinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
 			THEN 'EVO-20828'
@@ -538,7 +538,7 @@ LEFT JOIN taxidrental ON taxidrental.businessactionid = ba.businessactionid -- E
 LEFT JOIN taxiddeal1 ON taxiddeal1.businessactionid = ba.businessactionid -- EVO-9836 Deal Unit tax with invalid taxentityid
 LEFT JOIN taxiddeal2 ON taxiddeal2.businessactionid = ba.businessactionid -- EVO-26472 Deal Unit Tax with taxentityid from other store
 LEFT JOIN tradedealid ON tradedealid.businessactionid = ba.businessactionid -- EVO-22520 Deal Trade MAE with invalid tradedealid
-LEFT JOIN dupepartinvoice ON dupepartinvoice.businessactionid = ba.businessactionid
+LEFT JOIN oobdupepartinvoice ON oobdupepartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid
 WHERE ba.STATUS IN (2, 4)
 ORDER BY s.storename ASC,
