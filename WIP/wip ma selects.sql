@@ -540,6 +540,6 @@ LEFT JOIN taxiddeal2 ON taxiddeal2.businessactionid = ba.businessactionid -- EVO
 LEFT JOIN tradedealid ON tradedealid.businessactionid = ba.businessactionid -- EVO-22520 Deal Trade MAE with invalid tradedealid
 LEFT JOIN dupepartinvoice ON dupepartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid
-WHERE ba.STATUS = 2
+WHERE ba.STATUS IN (2, 4)
 ORDER BY s.storename ASC,
 	documentdate DESC
