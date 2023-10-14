@@ -247,6 +247,17 @@ AS (
 		) AS subquery
 	GROUP BY businessactionid
 	),
+partinvoicescheduledmu
+AS (
+	SELECT ba.businessactionid
+	FROM papartinvoiceline pil
+	INNER JOIN papartinvoice pi ON pi.partinvoiceid = pil.partinvoiceid
+	INNER JOIN cocategory c ON c.categoryid = pil.categoryid
+	INNER JOIN mabusinessaction ba ON ba.documentid = pil.partinvoiceid
+	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = c.glinventory
+	WHERE coa.schedule != 0
+		AND ba.STATUS = 2
+	),
 analysispending -- verified to work at least once 
 AS (
 	SELECT ba.businessactionid
@@ -417,6 +428,20 @@ AS (
 		GROUP BY ba.businessactionid
 		) data
 	GROUP BY businessactionid
+	),
+oobwrongmopamountrepairorder
+AS (
+	SELECT ba.businessactionid
+	FROM cocommoninvoicepayment cip
+	INNER JOIN cocommoninvoice ci ON ci.commoninvoiceid = cip.commoninvoiceid
+	INNER JOIN serepairorder ro ON ro.repairorderid = ci.documentid
+	INNER JOIN serototals rt ON rt.roid = ro.repairorderid
+	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
+	WHERE ba.STATUS = 2
+		AND ro.storeid = ba.storeid
+	GROUP BY roid,
+		ba.businessactionid
+	HAVING sum(cip.amount) != rt.rototalnw
 	)
 SELECT ba.documentnumber,
 	maedata.doctype AS documenttype,
@@ -473,6 +498,11 @@ SELECT ba.documentnumber,
 		END AS erroraccrecvpart,
 	'|' AS erroraccessing,
 	CASE 
+		WHEN partinvoicescheduledmu.businessactionid IS NOT NULL -- Error Accessing On Part Receiving Document
+			THEN 'EVO-14901'
+		ELSE 'N/A'
+		END AS partinvoicescheduledmu,
+	CASE 
 		WHEN analysispending.businessactionid IS NOT NULL -- Analysis Pending On Part Receiving Document
 			THEN 'EVO-29301'
 		ELSE 'N/A'
@@ -516,7 +546,12 @@ SELECT ba.documentnumber,
 		WHEN oobmissingdiscountpartinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
 			THEN 'EVO-20828'
 		ELSE 'N/A'
-		END AS invoicemissingdiscount
+		END AS invoicemissingdiscount,
+	CASE 
+		WHEN oobwrongmopamountrepairorder.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
+			THEN 'EVO-30796'
+		ELSE 'N/A'
+		END AS oobwrongmopamountrepairorder
 FROM mabusinessaction ba
 LEFT JOIN oob ON oob.businessactionid = ba.businessactionid
 LEFT JOIN maedata ON maedata.businessactionid = ba.businessactionid
@@ -528,6 +563,7 @@ LEFT JOIN erroraccrolabor earol ON earol.businessactionid = ba.businessactionid 
 LEFT JOIN erroraccpicat eapicat ON eapicat.businessactionid = ba.businessactionid -- EVO-13570 Part Invoice Line with Bad Categoryid
 LEFT JOIN erroraccreceivepart earpcat ON earpcat.businessactionid = ba.businessactionid -- EVO-31748 Part Receiving Doc with Bad Categoryid
 LEFT JOIN erroraccmiscsaletype ON erroraccmiscsaletype.businessactionid = ba.businessactionid -- EVO-39691 RO with bad misc item categoryid
+LEFT JOIN partinvoicescheduledmu ON partinvoicescheduledmu.businessactionid = ba.businessactionid -- EVO-14901 Part on Invoice with MU Category
 LEFT JOIN missingmae ON missingmae.businessactionid = ba.businessactionid
 LEFT JOIN analysispending ON analysispending.businessactionid = ba.businessactionid
 LEFT JOIN invalidglnonpayro ON invalidglnonpayro.businessactionid = ba.businessactionid
@@ -540,6 +576,7 @@ LEFT JOIN taxiddeal2 ON taxiddeal2.businessactionid = ba.businessactionid -- EVO
 LEFT JOIN tradedealid ON tradedealid.businessactionid = ba.businessactionid -- EVO-22520 Deal Trade MAE with invalid tradedealid
 LEFT JOIN oobdupepartinvoice ON oobdupepartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid
+LEFT JOIN oobwrongmopamountrepairorder ON oobwrongmopamountrepairorder.businessactionid = ba.businessactionid -- EVO-30796 Mop Amount less than Amount to Collect on RO
 WHERE ba.STATUS IN (2, 4)
 ORDER BY s.storename ASC,
 	documentdate DESC
