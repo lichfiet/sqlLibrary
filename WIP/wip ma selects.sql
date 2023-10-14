@@ -306,13 +306,13 @@ AS (
 	LEFT JOIN papartinvoice p ON p.partinvoiceid = b.documentid
 	INNER JOIN cocommoninvoice c ON c.documentid = df.dealid
 		OR c.documentid = p.partinvoiceid
+		OR c.commoninvoiceid = b.documentid
 	INNER JOIN cocommoninvoicepayment ci ON ci.commoninvoiceid = c.commoninvoiceid
-	INNER JOIN comethodofpayment m ON m.methodofpaymentid = ci.methodofpaymentid
-	LEFT JOIN glchartofaccounts coa ON coa.acctdeptid = m.glacct
+	INNER JOIN comethodofpayment mop ON mop.methodofpaymentid = ci.methodofpaymentid
 	WHERE b.STATUS = 2
 		AND ci.description = ''
-		AND ci.amount != 0
-		AND coa.acctdeptid IS NULL
+		AND mop.description = ''
+		AND p.invoicetype NOT IN (2,3)
 	GROUP BY b.businessactionid
 	),
 taxidrental
