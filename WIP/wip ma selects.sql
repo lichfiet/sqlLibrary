@@ -459,6 +459,20 @@ AS (
 		) data
 	GROUP BY businessactionid
 	),
+taxoobpartinvoice -- https://lightspeeddms.atlassian.net/browse/EVO-17198
+AS (
+	SELECT ba.businessactionid
+	FROM papartinvoice pi
+	INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
+	INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
+	INNER JOIN mabusinessaction ba ON ba.invoicenumber = pi.partinvoicenumber::TEXT
+	INNER JOIN mabusinessactionitem bati ON bati.businessactionid = ba.businessactionid
+	INNER JOIN oob ON oob.businessactionid = ba.businessactionid -- Join on the OOB cte so we can validate fixing this fixes the oob amount
+	WHERE ba.documenttype = 1001
+		AND ba.STATUS = 2
+		AND (piti.taxamount - pite.taxamount) = oob.oobamt
+	GROUP BY ba.businessactionid
+	),
 oobwrongmopamountrepairorder
 AS (
 	SELECT ba.businessactionid
@@ -486,6 +500,17 @@ AS (
 		b.businessactionid
 	HAVING count(C.commoninvoicepaymentid) = 1
 		AND c.amount != a.balancetofinance
+	),
+taxroundingrepairorder
+AS (
+	SELECT ba.businessactionid
+	FROM serepairordertaxentity e
+	INNER JOIN serepairordertaxitem i ON e.repairordertaxitemid = i.repairordertaxitemid
+	INNER JOIN serepairorder ro ON ro.repairorderid = i.repairorderid
+	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
+	WHERE ba.STATUS = 2
+		AND e.taxamount != ROUND(e.taxamount, - 2)
+	GROUP BY ba.businessactionid
 	)
 SELECT ba.documentnumber,
 	maedata.doctype AS documenttype,
@@ -577,35 +602,45 @@ SELECT ba.documentnumber,
 		ELSE 'N/A'
 		END AS errorupdatingacctg,
 	CASE 
-		WHEN tradedealid.businessactionid IS NOT NULL -- Deal with bad taxid linked to diff store
+		WHEN tradedealid.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
 			THEN 'EVO-22520'
 		ELSE 'N/A'
 		END AS tradedealid,
 	CASE 
-		WHEN dealunitid1.businessactionid IS NOT NULL -- MU with bad dealunitid
+		WHEN dealunitid1.businessactionid IS NOT NULL -- MU with bad dealunitid // NOT TESTED, PLEASE CORRECT IF NOT WORKING
 			THEN 'EVO-21635'
 		ELSE 'N/A'
 		END AS dealunitid1,
 	CASE 
-		WHEN oobdupepartinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
+		WHEN oobdupepartinvoice.businessactionid IS NOT NULL -- Tested and confirmed Duplicate Part invoice / SO
 			THEN 'EVO-36594'
 		ELSE 'N/A'
 		END AS oobdupepartinvoice,
 	CASE 
-		WHEN oobmissingdiscountpartinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
+		WHEN oobmissingdiscountpartinvoice.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
 			THEN 'EVO-20828'
 		ELSE 'N/A'
 		END AS invoicemissingdiscount,
+	CASE 
+		WHEN taxoobpartinvoice.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
+			THEN 'EVO-17198'
+		ELSE 'N/A'
+		END AS taxoobpartinvoice,
 	CASE 
 		WHEN oobwrongmopamountrepairorder.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
 			THEN 'EVO-30796'
 		ELSE 'N/A'
 		END AS oobwrongmopamountrepairorder,
 	CASE 
-		WHEN oobwrongamtsalesdeal.businessactionid IS NOT NULL -- NOT VERIFIED BUT ADDED JUST IN CASE
+		WHEN oobwrongamtsalesdeal.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
 			THEN 'EVO-31125'
 		ELSE 'N/A'
-		END AS oobwrongamtsalesdeal
+		END AS oobwrongamtsalesdeal,
+	CASE 
+		WHEN taxroundingrepairorder.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
+			THEN 'EVO-13501'
+		ELSE 'N/A'
+		END AS taxroundingrepairorder
 FROM mabusinessaction ba
 LEFT JOIN oob ON oob.businessactionid = ba.businessactionid
 LEFT JOIN maedata ON maedata.businessactionid = ba.businessactionid
@@ -630,9 +665,11 @@ LEFT JOIN taxiddeal2 ON taxiddeal2.businessactionid = ba.businessactionid -- EVO
 LEFT JOIN tradedealid ON tradedealid.businessactionid = ba.businessactionid -- EVO-22520 Deal Trade MAE with invalid tradedealid
 LEFT JOIN dealunitid1 ON dealunitid1.businessactionid = ba.businessactionid -- EVO-21635 Deal Unit ID linking to invalid dealunit
 LEFT JOIN oobdupepartinvoice ON oobdupepartinvoice.businessactionid = ba.businessactionid
-LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid
+LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid -- EVO-20828
+LEFT JOIN taxoobpartinvoice ON taxoobpartinvoice.businessactionid = ba.businessactionid -- EVO-17198 taxes oob compared to tax entity amounts
 LEFT JOIN oobwrongmopamountrepairorder ON oobwrongmopamountrepairorder.businessactionid = ba.businessactionid -- EVO-30796 Mop Amount less than Amount to Collect on RO
 LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.businessactionid -- EVO-31125
+LEFT JOIN taxroundingrepairorder ON taxroundingrepairorder.businessactionid = ba.businessactionid
 WHERE ba.STATUS IN (2, 4)
 ORDER BY s.storename ASC,
 	documentdate DESC
