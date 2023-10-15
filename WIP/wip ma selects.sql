@@ -304,7 +304,7 @@ AS (
 	FROM mabusinessaction b
 	LEFT JOIN sadealfinalization df ON df.dealfinalizationid = b.documentid
 	LEFT JOIN papartinvoice p ON p.partinvoiceid = b.documentid
-	    AND p.invoicetype NOT IN (2, 3)
+		AND p.invoicetype NOT IN (2, 3)
 	INNER JOIN cocommoninvoice c ON c.documentid = df.dealid
 		OR c.documentid = p.partinvoiceid
 		OR c.commoninvoiceid = b.documentid
@@ -362,6 +362,25 @@ AS (
 	WHERE ba.STATUS = 2
 		AND t.storeid <> d.storeid
 		AND d.finalizedate > '2018-10-01'
+	GROUP BY ba.businessactionid
+	),
+dealunitid1 -- https://lightspeeddms.atlassian.net/browse/EVO-21635
+AS (
+	SELECT ba.businessactionid
+	FROM samajorunit mu
+	LEFT JOIN sadealunit x ON x.majorunitid = mu.majorunitid
+	LEFT JOIN sadealunit x1 ON x1.dealunitid = mu.dealunitid
+	INNER JOIN sadeal d ON d.dealid = x.dealid
+	INNER JOIN sadealfinalization df ON df.dealid = d.dealid
+	INNER JOIN mabusinessaction ba ON ba.businessactionid = df.dealfinalizationid
+	WHERE mu.STATE = 2
+		AND (
+			x.dealunitid != 0
+			OR x.dealunitid != NULL
+			)
+		AND d.STATE = 5
+		AND x1.dealunitid IS NULL
+		AND ba.STATUS = 2
 	GROUP BY ba.businessactionid
 	),
 tradedealid
@@ -453,6 +472,20 @@ AS (
 	GROUP BY roid,
 		ba.businessactionid
 	HAVING sum(cip.amount) != rt.rototalnw
+	),
+oobwrongamtsalesdeal
+AS (
+	SELECT b.businessactionid
+	FROM sadeal A
+	INNER JOIN sadealfinalization df ON df.dealid = a.dealid
+	INNER JOIN mabusinessaction B ON b.documentid = df.dealfinalizationid
+	INNER JOIN cocommoninvoicepayment C ON C.commoninvoiceid = df.commoninvoiceid
+	WHERE B.STATUS = 2
+	GROUP BY a.balancetofinance,
+		c.commoninvoicepaymentid,
+		b.businessactionid
+	HAVING count(C.commoninvoicepaymentid) = 1
+		AND c.amount != a.balancetofinance
 	)
 SELECT ba.documentnumber,
 	maedata.doctype AS documenttype,
@@ -549,6 +582,11 @@ SELECT ba.documentnumber,
 		ELSE 'N/A'
 		END AS tradedealid,
 	CASE 
+		WHEN dealunitid1.businessactionid IS NOT NULL -- MU with bad dealunitid
+			THEN 'EVO-21635'
+		ELSE 'N/A'
+		END AS dealunitid1,
+	CASE 
 		WHEN oobdupepartinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
 			THEN 'EVO-36594'
 		ELSE 'N/A'
@@ -562,7 +600,12 @@ SELECT ba.documentnumber,
 		WHEN oobwrongmopamountrepairorder.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
 			THEN 'EVO-30796'
 		ELSE 'N/A'
-		END AS oobwrongmopamountrepairorder
+		END AS oobwrongmopamountrepairorder,
+	CASE 
+		WHEN oobwrongamtsalesdeal.businessactionid IS NOT NULL -- NOT VERIFIED BUT ADDED JUST IN CASE
+			THEN 'EVO-31125'
+		ELSE 'N/A'
+		END AS oobwrongamtsalesdeal
 FROM mabusinessaction ba
 LEFT JOIN oob ON oob.businessactionid = ba.businessactionid
 LEFT JOIN maedata ON maedata.businessactionid = ba.businessactionid
@@ -585,9 +628,11 @@ LEFT JOIN taxidrental ON taxidrental.businessactionid = ba.businessactionid -- E
 LEFT JOIN taxiddeal1 ON taxiddeal1.businessactionid = ba.businessactionid -- EVO-9836 Deal Unit tax with invalid taxentityid
 LEFT JOIN taxiddeal2 ON taxiddeal2.businessactionid = ba.businessactionid -- EVO-26472 Deal Unit Tax with taxentityid from other store
 LEFT JOIN tradedealid ON tradedealid.businessactionid = ba.businessactionid -- EVO-22520 Deal Trade MAE with invalid tradedealid
+LEFT JOIN dealunitid1 ON dealunitid1.businessactionid = ba.businessactionid -- EVO-21635 Deal Unit ID linking to invalid dealunit
 LEFT JOIN oobdupepartinvoice ON oobdupepartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN oobwrongmopamountrepairorder ON oobwrongmopamountrepairorder.businessactionid = ba.businessactionid -- EVO-30796 Mop Amount less than Amount to Collect on RO
+LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.businessactionid -- EVO-31125
 WHERE ba.STATUS IN (2, 4)
 ORDER BY s.storename ASC,
 	documentdate DESC
