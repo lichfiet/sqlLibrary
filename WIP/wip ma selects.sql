@@ -192,6 +192,20 @@ AS (
 	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
 	WHERE ba.STATUS = 2
 	GROUP BY businessactionid
+	
+	UNION
+	
+	SELECT ba.businessactionid -- this one probably needs a different CR but it has to do with the warranty company having a diff storeid for freight
+	FROM serepairorder ro
+	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
+	INNER JOIN serepairorderunit rou ON rou.repairorderid = ro.repairorderid
+	INNER JOIN serepairorderjob roj ON roj.repairorderunitid = rou.repairorderunitid
+	INNER JOIN sewarrantyclaim wc ON wc.repairorderjobid = roj.repairorderjobid
+	INNER JOIN cowarrantycompany warrcom ON warrcom.warrantycompanyid = wc.warrantycompanyid
+	INNER JOIN cocategory currcat ON currcat.categoryid = warrcom.freightcategoryid
+		AND currcat.storeid != warrcom.storeid
+	WHERE ba.STATUS = 2
+	GROUP BY ba.businessactionid
 	),
 erroraccmiscsaletype
 AS (
