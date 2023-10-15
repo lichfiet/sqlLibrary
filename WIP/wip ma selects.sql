@@ -364,6 +364,28 @@ AS (
 		AND d.finalizedate > '2018-10-01'
 	GROUP BY ba.businessactionid
 	),
+taxidpartinvoice1
+AS (
+	SELECT ba.businessactionid
+	FROM mabusinessaction ba
+	INNER JOIN papartinvoice pi ON pi.partinvoiceid = ba.documentid
+	INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
+	INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
+	LEFT JOIN cotax t ON t.taxid = pite.taxentityid
+	LEFT JOIN cotax t1 ON t1.taxcategoryid = piti.taxcategoryid
+	INNER JOIN cotaxcategory ct ON ct.taxcategoryid = piti.taxcategoryid
+	WHERE ba.STATUS = 2
+		AND t1.taxid <> t.taxid
+		AND t1.description = t.description
+		AND t1.taxid <> pite.taxentityid
+		AND ct.taxcategoryid = t1.taxcategoryid
+		OR (
+			ba.STATUS = 2
+			AND pite.taxentityid IS NULL
+			)
+	GROUP BY partinvoicetaxentityid,
+		ba.businessactionid
+	),
 dealunitid1 -- https://lightspeeddms.atlassian.net/browse/EVO-21635
 AS (
 	SELECT ba.businessactionid
@@ -602,6 +624,11 @@ SELECT ba.documentnumber,
 		ELSE 'N/A'
 		END AS errorupdatingacctg,
 	CASE 
+		WHEN taxidpartinvoice1.businessactionid IS NOT NULL -- part invoice tax entity with bad taxentityid https://lightspeeddms.atlassian.net/browse/EVO-35995
+			THEN 'EVO-35995'
+		ELSE 'N/A'
+		END AS taxidpartinvoice1,
+	CASE 
 		WHEN tradedealid.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
 			THEN 'EVO-22520'
 		ELSE 'N/A'
@@ -662,6 +689,7 @@ LEFT JOIN miscinvnonarmop ON miscinvnonarmop.businessactionid = ba.businessactio
 LEFT JOIN taxidrental ON taxidrental.businessactionid = ba.businessactionid -- EVO-12777 Rental Reservation with bad rental posting taxid
 LEFT JOIN taxiddeal1 ON taxiddeal1.businessactionid = ba.businessactionid -- EVO-9836 Deal Unit tax with invalid taxentityid
 LEFT JOIN taxiddeal2 ON taxiddeal2.businessactionid = ba.businessactionid -- EVO-26472 Deal Unit Tax with taxentityid from other store
+LEFT JOIN taxidpartinvoice1 ON taxidpartinvoice1.businessactionid = ba.businessactionid -- EVO-35995 
 LEFT JOIN tradedealid ON tradedealid.businessactionid = ba.businessactionid -- EVO-22520 Deal Trade MAE with invalid tradedealid
 LEFT JOIN dealunitid1 ON dealunitid1.businessactionid = ba.businessactionid -- EVO-21635 Deal Unit ID linking to invalid dealunit
 LEFT JOIN oobdupepartinvoice ON oobdupepartinvoice.businessactionid = ba.businessactionid
