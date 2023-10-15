@@ -523,16 +523,22 @@ AS (
 	HAVING count(C.commoninvoicepaymentid) = 1
 		AND c.amount != a.balancetofinance
 	),
-taxroundingrepairorder
+taxroundingrepairorder -- heavily modified 13501 NOT VERIFIED TO WORK yet 
 AS (
-	SELECT ba.businessactionid
-	FROM serepairordertaxentity e
-	INNER JOIN serepairordertaxitem i ON e.repairordertaxitemid = i.repairordertaxitemid
-	INNER JOIN serepairorder ro ON ro.repairorderid = i.repairorderid
-	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
-	WHERE ba.STATUS = 2
-		AND e.taxamount != ROUND(e.taxamount, - 2)
-	GROUP BY ba.businessactionid
+	SELECT businessactionid
+	FROM (
+		SELECT ba.businessactionid
+		FROM serepairordertaxentity e
+		INNER JOIN serepairordertaxitem i ON e.repairordertaxitemid = i.repairordertaxitemid
+		INNER JOIN serepairorder ro ON ro.repairorderid = i.repairorderid
+		INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
+		WHERE ba.STATUS = 2
+		GROUP BY ba.businessactionid,
+			i.repairordertaxitemid
+		HAVING i.taxamount != ROUND(SUM(e.taxamount), - 2)
+			AND SUM(e.taxamount) != SUM(ROUND(e.taxamount, - 2))
+		) error
+	GROUP BY businessactionid
 	)
 SELECT ba.documentnumber,
 	maedata.doctype AS documenttype,
