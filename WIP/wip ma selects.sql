@@ -624,7 +624,7 @@ SELECT ba.documentnumber,
 		ELSE 'N/A'
 		END AS invalidglnonpayro,
 	CASE 
-		WHEN invalidgldealandinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
+		WHEN invalidgldealandinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice // UNABLE TO DIFFERENTIATE BETWEEN DEPOSIT APPLIED AND NO PAYMENT
 			THEN 'EVO-35010'
 		ELSE 'N/A'
 		END AS invalidgldealandinvoice,
