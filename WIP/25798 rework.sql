@@ -1,22 +1,19 @@
--- oooooooooooo oooooo     oooo   .oooooo.                       .oooo.     oooooooo  ooooooooo  .ooooo.    .ooooo.  
--- `888'     `8  `888.     .8'   d8P'  `Y8b                    .dP""Y88b   dP""""""" d"""""""8' 888' `Y88. d88'   `8.
---  888           `888.   .8'   888      888                         ]8P' d88888b.         .8'  888    888 Y88..  .8'
---  888oooo8       `888. .8'    888      888                       .d8P'      `Y88b       .8'    `Vbood888  `88888b. 
---  888    "        `888.8'     888      888      8888888        .dP'           ]88      .8'          888' .8'  ``88b
---  888       o      `888'      `88b    d88'                   .oP     .o o.   .88P     .8'         .88P'  `8.   .88P
--- o888ooooood8       `8'        `Y8bood8P'                    8888888888 `8bd88P'     .8'        .oP'      `boood8' 
 --
--- Forked from Chris Kulaga's Original SQL
--- 
--- Modified by: 
---      Trevor Lichfield
---      Spencer Lichfield 
---      John Scott
---      *add name here*
---                                                                                                                                                                        
+--
+-- 8888888888 888     888  .d88888b.          .d8888b.  888888888 8888888888  .d8888b.   .d8888b. 
+-- 888        888     888 d88P" "Y88b        d88P  Y88b 888             d88P d88P  Y88b d88P  Y88b
+-- 888        888     888 888     888               888 888            d88P  888    888 Y88b. d88P
+-- 8888888    Y88b   d88P 888     888             .d88P 8888888b.     d88P   Y88b. d888  "Y88888" 
+-- 888         Y88b d88P  888     888         .od888P"       "Y88b 88888888   "Y888P888 .d8P""Y8b.
+-- 888          Y88o88P   888     888 888888 d88P"             888  d88P            888 888    888
+-- 888           Y888P    Y88b. .d88P        888"       Y88b  d88P d88P      Y88b  d88P Y88b  d88P
+-- 8888888888     Y8P      "Y88888P"         888888888   "Y8888P" d88P        "Y8888P"   "Y8888P" 
+--
+--
 -- mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm
 --  
--- This SQL is used to diagnose common problems and issue relating to and caused by EVO-25798. 
+-- This SQL is used to diagnose common problems and issues relating to and caused by EVO-25798. 
+-- 
 -- It includes multiple diagnostics in this order:
 --
 --      Output 1: Incorrect Storeid / Accountingid or luids
@@ -26,53 +23,47 @@
 --
 --
 --                                                                                    
---                                                                                                                                                                        
---                                                                                                                                                                        
 -- mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm
--- 
 --
 --
---   .g8""8q.                mm                          mm            
--- .dP'    `YM.              MM                          MM       __,  
--- dM'      `MM `7MM  `7MM mmMMmm `7MMpdMAo.`7MM  `7MM mmMMmm    `7MM  
--- MM        MM   MM    MM   MM     MM   `Wb  MM    MM   MM        MM  
--- MM.      ,MP   MM    MM   MM     MM    M8  MM    MM   MM        MM  
--- `Mb.    ,dP'   MM    MM   MM     MM   ,AP  MM    MM   MM        MM  
---   `"bmmd"'     `Mbod"YML. `Mbmo  MMbmmd'   `Mbod"YML. `Mbmo   .JMML.
---                                  MM                                 
---                                .JMML.                               
---
+--  .d88888b.           888                      888         d888  
+-- d88P" "Y88b          888                      888        d8888  
+-- 888     888          888                      888          888  
+-- 888     888 888  888 888888 88888b.  888  888 888888       888  
+-- 888     888 888  888 888    888 "88b 888  888 888          888  
+-- 888     888 888  888 888    888  888 888  888 888          888  
+-- Y88b. .d88P Y88b 888 Y88b.  888 d88P Y88b 888 Y88b.        888  
+--  "Y88888P"   "Y88888  "Y888 88888P"   "Y88888  "Y888     8888888
+--                             888                                 
+--                             888                                 
+--                             888                                 
+--                                                                                                                                                                        
 --
 --
 --  Corrects erroneous packing slip invoice, storeid = 0
 --
-UPDATE glsltransaction gls
-SET storeid = 1,
-	storeidluid = data.good_id
-FROM (
-	SELECT gls.sltrxid,
+--
+    SELECT gls.sltrxid,
 		gls.storeid,
 		s.storeidluid AS good_id
 	FROM glsltransaction gls
 	INNER JOIN costore s USING (storeid)
-	WHERE s.storeid = 1
-	) data
-WHERE gls.storeid = 0
-	AND accttype = 2;
---                                                                                                                                                                        
+	WHERE s.storeid = 1;
+--
 -- mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm
--- 
 --
---   .g8""8q.                mm                          mm              
--- .dP'    `YM.              MM                          MM              
--- dM'      `MM `7MM  `7MM mmMMmm `7MMpdMAo.`7MM  `7MM mmMMmm     pd*"*b.
--- MM        MM   MM    MM   MM     MM   `Wb  MM    MM   MM      (O)   j8
--- MM.      ,MP   MM    MM   MM     MM    M8  MM    MM   MM          ,;j9
--- `Mb.    ,dP'   MM    MM   MM     MM   ,AP  MM    MM   MM       ,-='   
---   `"bmmd"'     `Mbod"YML. `Mbmo  MMbmmd'   `Mbod"YML. `Mbmo   Ammmmmmm
---                                  MM                                   
---                                .JMML.                                 
 --
+--  .d88888b.           888                      888         .d8888b. 
+-- d88P" "Y88b          888                      888        d88P  Y88b
+-- 888     888          888                      888               888
+-- 888     888 888  888 888888 88888b.  888  888 888888          .d88P
+-- 888     888 888  888 888    888 "88b 888  888 888         .od888P" 
+-- 888     888 888  888 888    888  888 888  888 888        d88P"     
+-- Y88b. .d88P Y88b 888 Y88b.  888 d88P Y88b 888 Y88b.      888"      
+--  "Y88888P"   "Y88888  "Y888 88888P"   "Y88888  "Y888     888888888 
+--                             888                                    
+--                             888                                    
+--                             888                                    
 --
 SELECT /* Remaining Amount*/ ROUND((sl.remainingamt * .0001), 2) AS remaining,
 	--
@@ -153,4 +144,5 @@ GROUP BY apinvoiceid,
 	sl.remainingamt,
 	sl.sltrxid,
 	voids.id
-HAVING sum(amtpaidthischeck) != (docamt - remainingamt) OR voids.id IS NOT NULL;
+HAVING sum(amtpaidthischeck) != (docamt - remainingamt)
+	OR voids.id IS NOT NULL;
