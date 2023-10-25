@@ -1,3 +1,11 @@
+-- WIP Entries Not Being Generated
+--
+-- SQL Description: finds labor sessions and repair orders where the technician rate = 0 on the session
+-- 
+-- How to Use: Copy the SQL statement, paste it in phoenix, and click run, no modification is neccesary.
+-- Jira Key/CR Number: N/A
+-- SQL Statement:
+
 -- To find affected repair orders that are open
 SELECT ro.repairordernumber, ro.dtstamp
 FROM selaborsession ls
