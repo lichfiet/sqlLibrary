@@ -97,13 +97,14 @@ SELECT h.glhistoryid,
 		END AS bad_ids
 FROM glhistory h
 INNER JOIN glchartofaccounts coa ON coa.acctdeptid = h.acctdeptid
-INNER JOIN costore s ON coa.accountingid = s.storeid
 INNER JOIN costoremap sm ON sm.parentstoreid = coa.accountingid
-INNER JOIN costore s2 ON sm.childstoreid = s2.storeid
 WHERE (
 		h.accountingidluid != coa.accountingidluid
+		OR h.accountingid != coa.accountingid
 		OR h.locationidluid != sm.childstoreidluid
+		OR h.locationid != sm.childstoreid
 		);
+
 
 /*Multiple Entries in GL Balance for 1 Acctdeptid*/
 SELECT 'duplicate glbalance entry for acctdeptid ' || b.acctdeptid AS description,
