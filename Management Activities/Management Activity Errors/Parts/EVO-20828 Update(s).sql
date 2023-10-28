@@ -32,20 +32,21 @@ WHERE bob.partinvoicelineid = pil.partinvoicelineid
 -- OR, if there is more than one part sold on all lines, you can try this one
 
 UPDATE papartinvoiceline pil
-SET adjustmentprice = adjustmentprice + bob.test
+SET adjustmentprice = adjustmentprice + bob.adjamt
 FROM (
 	SELECT partinvoicelineid,
 		sum(debitamt) AS debits,
 		sum(creditamt) AS credits,
 		(sum(debitamt) - sum(creditamt)) AS OOB_Amount,
-		(Round(((sum(debitamt) - sum(creditamt)) / qtysold), 4) * 10000)::INTEGER AS test
+		(Round(((sum(debitamt) - sum(creditamt)) / qtysold), 4) * 10000)::INTEGER AS adjamt
 	FROM papartinvoiceline pil
 	INNER JOIN mabusinessaction ba ON ba.documentid = pil.partinvoiceid
 	INNER JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid
-	WHERE ba.invoicenumber = '318518'
+	WHERE ba.invoicenumber = 'put number for part invoice here pls'
+		AND qtysold != 0
 	GROUP BY partinvoicelineid LIMIT 1
 	) bob
-WHERE bob.partinvoicelineid = pil.partinvoicelineid;
+WHERE bob.partinvoicelineid = pil.partinvoicelineid
 
 
 -- riley's
