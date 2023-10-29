@@ -18,13 +18,13 @@ and rop.partnumber = '201284'
 and p.categoryid <> rop.categoryid)data
 Where rop.repairorderpartid = data.repairorderpartid;
 
-/* UPDATE AND DIAGNOSTIC FOR PART INVOICES
-after running the diagnostic, the column updatestatus will tell you if you need to change the parts category. If it indicates a change is needed, 
-if not corrected the update won't correct that part. if (Manual Update Required, See SQL Comments) is returned, you will need to manually update 
-the part invoice line, using the sql after the update, labeled "manual part update" */
+-- UPDATE AND DIAGNOSTIC FOR PART INVOICES
+-- after running the diagnostic, the column updatestatus will tell you if you need to change the parts category. 
+-- If it indicates a change is needed, if not corrected the update won't correct that part.
+-- If (Manual Update Required, See SQL Comments) is returned, you will need to manually update the part invoice line, using the sql after the update, labeled "manual part update"
 
-SELECT ('Part Invoice Number: ' || pi.partinvoicenumber) as invoicenumber,
-	('Part #: ' || pil.partnumber) as partnumber,
+SELECT pi.partinvoicenumber,
+	pil.partnumber,
 	c.categorycode AS currcat,
 	cpart.categorycode AS newcat,
 	CASE 
