@@ -216,25 +216,3 @@ HAVING (ytm.ytmonth != (pytm.prevytmonth + (sum(amtcredit) * .0001) - (sum(amtde
 
 /* Updated SQL | After running this SQL, recalculate the chart of accounts and it will correct any issues. Recalculating will resolve issues with the GL Balance table as well where there may be duplicate entries. */
 
-UPDATE glhistory h
-SET accountingid = corr_accountingid,
-	accountingidluid = corr_accountingidluid,
-	locationid = corr_locationid,
-	locationidluid = corr_locationidluid
-FROM (
-	SELECT h.glhistoryid AS id,
-		h.locationidluid AS current_locationidluid,
-		h.locationid AS current_locationid,
-		s.childstoreid AS corr_locationid,
-		s.childstoreidluid AS corr_locationidluid,
-		sm.parentstoreid AS corr_accountingid,
-		sm.parentstoreidluid AS corr_accountingidluid
-	FROM glhistory h
-	INNER JOIN costoremap s ON s.parentstoreid = h.accountingid
-	INNER JOIN costoremap sm ON sm.childstoreid = h.locationid
-	WHERE (
-			h.locationid <> s.childstoreid
-			OR h.accountingid <> sm.parentstoreid
-			)
-	) bob
-WHERE bob.id = h.glhistoryid;
