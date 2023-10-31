@@ -200,6 +200,20 @@ GROUP BY ps.partshipmentid
 HAVING count(DISTINCT vendornumber) = 1
 
 
+DELETE
+FROM aptopayinvoice
+WHERE aptopayinvid IN (
+		SELECT tpi.aptopayinvid
+		FROM aptopayinv tpi
+		LEFT JOIN glsltransaction sl ON sl.sltrxid = tpi.apinvoiceid
+		LEFT JOIN apvendor v ON v.vendorid = sl.acctid
+		WHERE sl.sltrxid IS NULL
+			OR sl.sltrxstate IN (9, 4)
+			OR v.vendorid IS NULL
+		)
+
+
+
 -- EVO-25798 Update Remaining Amount Based on Check History
 --
 -- SQL Description: This SQL is used to set the remaining amount and state of invoices to 
