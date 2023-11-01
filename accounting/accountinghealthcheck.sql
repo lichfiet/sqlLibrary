@@ -27,8 +27,7 @@ WHERE coa.accttype IN (3, 4, 6)
 GROUP BY xr.acctdeptid,
 	coa.acctdeptid
 HAVING COUNT(xr.acctdeptid) < 2
-ORDER BY COUNT(xr.acctdeptid) DESC;
-
+ORDER BY COUNT(xr.acctdeptid) DESC
 */
 
 /* DEFECTS AND PRODUCT CRs */
