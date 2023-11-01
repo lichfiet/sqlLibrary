@@ -329,6 +329,21 @@ AS (
 		AND mop.description = ''
 	GROUP BY b.businessactionid
 	),
+invalidglclaimsubmission
+AS (
+	SELECT ba.businessactionid AS businessactionid
+	FROM mabusinessaction ba
+	INNER JOIN sewarrantysubmissioncredit wsc ON wsc.warrantysubmissioncreditid = ba.documentid
+	INNER JOIN sewarrantyclaimcredit using (warrantysubmissioncreditid)
+	INNER JOIN sewarrantyclaim using (warrantyclaimid)
+	INNER JOIN serepairorderjob roj using (repairorderjobid)
+	INNER JOIN cosaletype st ON st.saletypeid = roj.saletypeid
+	WHERE ba.STATUS = 2
+		AND st.usagecode = 5
+		AND ba.documenttype = 2003
+		AND roj.warrantycompanyid <> wsc.warrantycompanyid
+	GROUP BY ba.businessactionid
+	),
 taxidrental
 AS (
 	SELECT ba.businessactionid
@@ -560,6 +575,7 @@ SELECT ba.documentnumber,
 	maedata.docdate AS DATE,
 	errortxt.txt AS errormessage,
 	s.storename,
+	ba.documentid,
 	'-->' AS errorchecks,
 	CASE 
 		WHEN oob.oob IS NOT NULL
@@ -628,6 +644,11 @@ SELECT ba.documentnumber,
 			THEN 'EVO-35010'
 		ELSE 'N/A'
 		END AS invalidgldealandinvoice,
+	CASE 
+		WHEN invalidglclaimsubmission.businessactionid IS NOT NULL
+			THEN 'EVO-29577'
+		ELSE 'N/A'
+		END,
 	CASE 
 		WHEN taxidrental.businessactionid IS NOT NULL -- Rental Reservation with bad taxid
 			THEN 'EVO-12777'
@@ -704,6 +725,7 @@ LEFT JOIN missingmae ON missingmae.businessactionid = ba.businessactionid
 LEFT JOIN analysispending ON analysispending.businessactionid = ba.businessactionid
 LEFT JOIN invalidglnonpayro ON invalidglnonpayro.businessactionid = ba.businessactionid
 LEFT JOIN invalidgldealandinvoice ON invalidgldealandinvoice.businessactionid = ba.businessactionid
+LEFT JOIN invalidglclaimsubmission ON invalidglclaimsubmission.businessactionid = ba.businessactionid -- EVO-29577
 LEFT JOIN schedacctnotvalidar ON schedacctnotvalidar.businessactionid = ba.businessactionid -- EVO-38907 AR Sched Acct not valid for MOP
 LEFT JOIN miscinvnonarmop ON miscinvnonarmop.businessactionid = ba.businessactionid -- EVO-33866 AR Sched Invalid for Misc Receipt
 LEFT JOIN taxidrental ON taxidrental.businessactionid = ba.businessactionid -- EVO-12777 Rental Reservation with bad rental posting taxid
