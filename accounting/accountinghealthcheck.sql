@@ -15,6 +15,22 @@ GROUP BY xr.acctdeptid,
 	coa.acctdeptid
 HAVING COUNT(xr.acctdeptid) > 1;
 
+/* Less than 2 consolidations for P&L Accounts
+
+SELECT 'Account code ' || coa.acctdept || ' is a detail account, consolidated to less than one account' AS description,
+	'(# of Consolidation): ' || COUNT(xr.acctdeptid) AS consolidation_count,
+	xr.acctdeptid AS cons_acctdeptid
+FROM glconsxref xr
+LEFT JOIN glchartofaccounts coa ON coa.acctdeptid = xr.acctdeptid
+WHERE coa.accttype IN (3, 4, 6)
+    AND consind = 0
+GROUP BY xr.acctdeptid,
+	coa.acctdeptid
+HAVING COUNT(xr.acctdeptid) < 2
+ORDER BY COUNT(xr.acctdeptid) DESC;
+
+*/
+
 /* DEFECTS AND PRODUCT CRs */
 /*glconsxref entry mapped to invalid GL Account*/-- used to be 13 and 8 and 6
 SELECT 'glconsxref entry mapped to invalid GL Account OR invalid accountingid' AS description,
