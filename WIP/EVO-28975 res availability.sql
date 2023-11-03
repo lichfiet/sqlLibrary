@@ -15,6 +15,9 @@ AS (
 		CASE 
 			WHEN resi.noenddate = 1
 				THEN '30000-09-30'
+			WHEN resi.noenddate = 1
+				AND resi.STATE NOT IN (1, 2)
+				THEN TO_CHAR(resi.contractstartdate, 'YYYY-MM-DD')
 			ELSE TO_CHAR(resi.contractenddate, 'YYYY-MM-DD')
 			END AS contractend
 	FROM rerentalitem ri
@@ -31,7 +34,14 @@ AS (
 		--	rde.contractstartdate || ' --> ' || rde.contractenddate,
 		rds.STATE AS curritemstate,
 		rde.STATE AS nextritemstate,
-		rds.reservationid,
+		CASE 
+			WHEN (
+					rde.contractstart < rds.contractend
+					AND rde.STATE = 2
+					)
+				THEN rde.reservationid
+			ELSE rds.reservationid
+			END AS reservationid,
 		CASE 
 			WHEN (
 					rde.contractstart < rds.contractend
@@ -108,7 +118,7 @@ AS (
 		AND rde.resnumber = rds.resnumber + 1
 	)
 SELECT r.reservationnumber,
-    ar.availstart AS newitem_availabilitystart,
+	ar.availstart AS newitem_availabilitystart,
 	'<',
 	pr.resitemstart AS badres_contractstart,
 	pr.resitemend AS badres_contractend,
@@ -118,6 +128,6 @@ SELECT r.reservationnumber,
 	ar.*
 FROM problemrentals pr
 INNER JOIN rereservation r ON pr.reservationid = r.reservationid
-LEFT JOIN availablerentals ar ON ar.rentaltypeid = pr.rentaltypeid
-	AND pr.resitemstart > ar.availstart
-	AND ar.availend > pr.resitemend
+LEFT JOIN availablerentals ar ON pr.resitemstart >= ar.availstart
+	AND ar.availend >= pr.resitemend
+	AND ar.rentaltypeid = pr.rentaltypeid
