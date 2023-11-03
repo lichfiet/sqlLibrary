@@ -16,26 +16,35 @@ AS (
 	ORDER BY resi.reservationid
 	)
 SELECT ri.rentalitemnumber,
+    ri.itemdescription,
 	rds.contractend AS availstart,
 	rde.contractstart AS availend,
 	--	rds.contractstartdate || ' --> ' || rds.contractenddate,
 	--	rde.contractstartdate || ' --> ' || rde.contractenddate,
 	rds.STATE AS curritemstate,
 	rde.STATE AS nextritemstate,
+	CASE 
+		WHEN (
+				rde.contractstart < rds.contractend
+				AND rde.STATE = 2
+				)
+			THEN rde.reservationitemid
+		ELSE rds.reservationitemid
+		END AS resitemid,
 	ri.*
 FROM rerentalitem ri
 INNER JOIN reservationdates rds ON rds.itemid = ri.rentalitemid
 LEFT JOIN reservationdates rde ON rde.itemid = rds.itemid
 	AND rde.resnumber = rds.resnumber + 1
-WHERE (
-		rde.contractstart < rds.contractend
-		AND rde.STATE = 2
-		OR (
-			(
-				rds.noenddate = 1
-				OR rds.contractend < rde.contractstart
-				)
-			AND rds.STATE = 2
-			AND rde.contractstart < rds.contractend
+WHERE rde.contractstart < rds.contractend
+	AND rde.STATE = 2
+	--
+	OR (
+		(
+			rds.noenddate = 1
+			OR rds.contractend < rde.contractstart
+			AND rde.contractstart != rde.contractend
 			)
+		AND rds.STATE = 2
+		AND rde.contractstart < rds.contractend
 		)
