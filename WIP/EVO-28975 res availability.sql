@@ -23,27 +23,27 @@ AS (
 		row_Number() OVER (
 			PARTITION BY resi.rentalitemid ORDER BY (
 					CASE 
-						WHEN resi.noenddate = 1
+						WHEN resi.noenddate = 1 -- when there is no end date, date = distant future date
 							THEN '30000-09-30'
-						WHEN resi.noenddate = 1
+						WHEN resi.noenddate = 1 -- when there is no end date but reservation is stopped, end date = start date
 							AND resi.STATE NOT IN (1, 2)
 							THEN TO_CHAR(resi.contractstartdate, 'YYYY-MM-DD')
-						ELSE TO_CHAR(resi.contractenddate, 'YYYY-MM-DD')
+						ELSE TO_CHAR(resi.contractenddate, 'YYYY-MM-DD') -- else, use the end date
 						END
 					) ASC,
-				TO_CHAR(resi.contractstartdate, 'YYYY-MM-DD') DESC
+				TO_CHAR(resi.contractstartdate, 'YYYY-MM-DD') ASC -- also order by start date for items where both have no end date, selects newest item
 			) AS resnumber,
 		--
 		TO_CHAR(resi.contractstartdate, 'YYYY-MM-DD') AS contractstart, -- start date of the reservation item to the day
 		--
 		-- Case when for the end date of the reservation, need for items stopped without an end date, or open items with no end date
 		CASE 
-			WHEN resi.noenddate = 1
+			WHEN resi.noenddate = 1 -- when there is no end date, date = distant future date
 				THEN '30000-09-30'
-			WHEN resi.noenddate = 1
+			WHEN resi.noenddate = 1 -- -- when there is no end date but reservation is stopped, end date = start date
 				AND resi.STATE NOT IN (1, 2)
 				THEN TO_CHAR(resi.contractstartdate, 'YYYY-MM-DD')
-			ELSE TO_CHAR(resi.contractenddate, 'YYYY-MM-DD')
+			ELSE TO_CHAR(resi.contractenddate, 'YYYY-MM-DD') -- else, use the end date
 			END AS contractend
 	--
 	FROM rerentalitem ri
@@ -86,7 +86,12 @@ AS (
 					)
 				THEN rde.contractend
 			ELSE rds.contractend
-			END AS resitemend
+			END AS resitemend,
+		CASE 
+			WHEN rds.contractstart = rde.contractstart
+				THEN 'Same day conflict'
+			ELSE 'N/A'
+			END AS startconflict
 	FROM rerentalitem ri
 	INNER JOIN reservationdates rds ON rds.itemid = ri.rentalitemid
 	LEFT JOIN reservationdates rde ON rde.itemid = rds.itemid -- join used to find the next reservation that occurred after a given reservation
@@ -135,6 +140,22 @@ AS (
 	INNER JOIN reservationdates rds ON rds.itemid = ri.rentalitemid
 	LEFT JOIN reservationdates rde ON rde.itemid = rds.itemid
 		AND rde.resnumber = rds.resnumber + 1
+	
+	UNION -- to pull items with no history
+	
+	SELECT ri.rentalitemnumber AS newitemnumber,
+		ri.itemdescription,
+		ri.rentalitemid,
+		ri.rentaltypeid,
+		'10000-09-30' AS availstart,
+		'30000-09-30' AS availend,
+		'10000-09-30' || ' --> ' || '10000-09-30',
+		'30000-09-30' || ' --> ' || '30000-09-30',
+		1 AS curritemstate,
+		1 AS nextritemstate
+	FROM rerentalitem ri
+	LEFT JOIN rereservationitem rei ON rei.rentalitemid = ri.rentalitemid
+	WHERE rei.reservationitemid IS NULL
 	),
 resitems
 AS (
@@ -146,6 +167,7 @@ AS (
 				THEN 'Matched Types'
 			ELSE 'No Match'
 			END AS perfectmatch,
+		pr.startconflict,
 		ar.availstart AS newitem_availabilitystart,
 		'<' AS x,
 		pr.resitemstart AS badres_contractstart,
@@ -161,8 +183,8 @@ AS (
 					END ASC,
 				ar.newitemnumber ASC
 			) AS optionnumber,
---		row_Number() OVER (partition by ar.rentalitemid ORDER BY pr.rentalitemid ASC
---			) AS usednumber,
+		--		row_Number() OVER (partition by ar.rentalitemid ORDER BY pr.rentalitemid ASC
+		--			) AS usednumber,
 		ar.*
 	FROM problemrentals pr
 	INNER JOIN rereservation r ON pr.reservationid = r.reservationid
