@@ -415,6 +415,43 @@ AS (
 	GROUP BY partinvoicetaxentityid,
 		ba.businessactionid
 	),
+longvaltax -- https://lightspeeddms.atlassian.net/browse/EVO-37225
+AS (
+	SELECT ba.businessactionid
+	FROM sadealadjustmenttax dat
+	INNER JOIN sadealadjustment da ON da.dealadjustmentid = dat.dealadjustmentid
+	INNER JOIN mabusinessaction ba ON ba.documentid = da.dealadjustmentid
+	INNER JOIN (
+		SELECT ba.businessactionid,
+			STRING_AGG(errortext, ', ') AS TEXT
+		FROM mabusinessactionerror bae
+		INNER JOIN mabusinessaction ba ON ba.businessactionid = bae.businessactionid
+		GROUP BY ba.businessactionid
+		) errortext ON errortext.businessactionid = ba.businessactionid
+	WHERE ba.STATUS = 2
+		AND errortext.TEXT ilike '%Tax Entity not rounded%'
+		AND ROUND(taxamt, - 2) != taxamt
+	GROUP BY ba.businessactionid
+	
+	UNION
+	
+	SELECT ba.businessactionid
+	FROM rerentalpostingtaxdetail rptd
+	INNER JOIN rerentalpostingtax rpt ON rpt.rentalpostingtaxid = rptd.rentalpostingtaxid
+	INNER JOIN rerentalposting rp ON rp.rentalpostingid = rpt.rentalpostingid
+	INNER JOIN mabusinessaction ba ON ba.documentid = rp.rentalpostingid
+	INNER JOIN (
+		SELECT ba.businessactionid,
+			STRING_AGG(errortext, ', ') AS TEXT
+		FROM mabusinessactionerror bae
+		INNER JOIN mabusinessaction ba ON ba.businessactionid = bae.businessactionid
+		GROUP BY ba.businessactionid
+		) errortext ON errortext.businessactionid = ba.businessactionid
+	WHERE ROUND(rptd.taxamount, - 2) != rptd.taxamount
+		AND ba.STATUS = 2
+		AND errortext.TEXT ilike '%Tax Entity not rounded%'
+	GROUP BY ba.businessactionid
+	),
 dealunitid1 -- https://lightspeeddms.atlassian.net/browse/EVO-21635
 AS (
 	SELECT ba.businessactionid
@@ -639,11 +676,11 @@ SELECT ba.documentnumber,
 			THEN 'EVO-34114'
 		ELSE 'N/A'
 		END AS invalidglnonpayro,
-	CASE 
+/*	CASE removing this because it's brokebn 
 		WHEN invalidgldealandinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice // UNABLE TO DIFFERENTIATE BETWEEN DEPOSIT APPLIED AND NO PAYMENT
 			THEN 'EVO-35010'
 		ELSE 'N/A'
-		END AS invalidgldealandinvoice,
+		END AS invalidgldealandinvoice, */ 
 	CASE 
 		WHEN invalidglclaimsubmission.businessactionid IS NOT NULL
 			THEN 'EVO-29577'
@@ -654,6 +691,11 @@ SELECT ba.documentnumber,
 			THEN 'EVO-12777'
 		ELSE 'N/A'
 		END AS taxidrental,
+	CASE 
+		WHEN longvaltax.businessactionid IS NOT NULL
+			THEN 'EVO-37225'
+		ELSE 'N/A'
+		END AS longvaltax1,
 	CASE 
 		WHEN taxiddeal1.businessactionid IS NOT NULL -- Deal with bad taxid linked to diff store
 			THEN 'EVO-9836'
@@ -729,6 +771,7 @@ LEFT JOIN invalidglclaimsubmission ON invalidglclaimsubmission.businessactionid 
 LEFT JOIN schedacctnotvalidar ON schedacctnotvalidar.businessactionid = ba.businessactionid -- EVO-38907 AR Sched Acct not valid for MOP
 LEFT JOIN miscinvnonarmop ON miscinvnonarmop.businessactionid = ba.businessactionid -- EVO-33866 AR Sched Invalid for Misc Receipt
 LEFT JOIN taxidrental ON taxidrental.businessactionid = ba.businessactionid -- EVO-12777 Rental Reservation with bad rental posting taxid
+LEFT JOIN longvaltax ON longvaltax.businessactionid = ba.businessactionid -- EVO-37225 long val tax not rounded
 LEFT JOIN taxiddeal1 ON taxiddeal1.businessactionid = ba.businessactionid -- EVO-9836 Deal Unit tax with invalid taxentityid
 LEFT JOIN taxiddeal2 ON taxiddeal2.businessactionid = ba.businessactionid -- EVO-26472 Deal Unit Tax with taxentityid from other store
 LEFT JOIN taxidpartinvoice1 ON taxidpartinvoice1.businessactionid = ba.businessactionid -- EVO-35995 
