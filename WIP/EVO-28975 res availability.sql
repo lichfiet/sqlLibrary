@@ -168,12 +168,9 @@ AS (
 			ELSE 'No Match'
 			END AS perfectmatch,
 		pr.startconflict,
-		ar.availstart AS newitem_availabilitystart,
-		'<' AS x,
-		pr.resitemstart AS badres_contractstart,
-		pr.resitemend AS badres_contractend,
-		'<' AS x,
-		ar.availend AS newitem_availabilityend,
+		ar.availstart || ' --> ' AS availabilitystart,
+		'[ ' || pr.resitemstart || ' ===> ' || pr.resitemend || ' ]' AS badres_period,
+		' <-- ' ||	ar.availend AS availabilityend,
 		ar.newitemnumber AS newitem_number,
 		row_Number() OVER (
 			PARTITION BY pr.rentalitemid ORDER BY CASE 
