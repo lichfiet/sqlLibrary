@@ -49,6 +49,22 @@ AS (
 	FROM rerentalitem ri
 	INNER JOIN rereservationitem resi ON resi.rentalitemid = ri.rentalitemid
 	),
+	/* This CTE is used to compare the start and end time of rentals based on their end date, and their start dates to gauge whether there will be overlapping availability.
+It takes advantage of the row_number() function to compare the first reservation items, rds, to the items that were scheduled after them. The filters and case whens
+look for items where the end of the first reservation overlaps with the beginning of the next reservation. This includes items with no end date and the SQL
+assums the end date is in the year 3000. The case whens are using to distinguish between the two types of overlapping availability which are:
+
+1. items with no end date that have reservations scheduled during them or at the same time as them,
+    or where they start inbetween a stopped reservation
+    
+2. Items with an end date, where they overlap, but one or the other is stopped. The first variation
+    where the first item ends inbetween a stopped reservation is sometimes fixable in the system,
+    and the second, where the first reservation is stopped, and the next one is on-going and started before the
+    end of the first reservation, requires SQL.
+
+
+
+    */
 problemrentals
 AS (
 	SELECT ri.rentalitemnumber AS curritemnumber,
@@ -97,18 +113,38 @@ AS (
 	LEFT JOIN reservationdates rde ON rde.itemid = rds.itemid -- join used to find the next reservation that occurred after a given reservation
 		AND rde.resnumber = rds.resnumber + 1
 	--
-	-- Where the previous reservation has an end date after our start date
-	WHERE rde.contractstart < rds.contractend
-		AND rde.STATE = 2
-		-- Where a reservation was started after a reservation with no end date
+	-- LOGIC FOR ITEMS WITH AVAILABILITY ISSUES STARTS 
+	--
+	WHERE (
+			-- Where the current reservation is ongoing, and starts before the end of the previous reservation (Needs SQL)
+			--
+			rde.contractstart < rds.contractend
+			AND rde.STATE = 2 -- next res ongoing
+			AND rds.STATE NOT IN (1, 2) -- previous is stopped
+			)
 		OR (
-			(
-				rds.noenddate = 1
-				OR rds.contractend < rde.contractstart
-				AND rde.contractstart != rde.contractend
+			-- Where both reservations are ongoing, and the current one was started after a previous reservation with no end date (Sometimes fixable on front-end)
+			--
+			rds.STATE = 2 -- previous res ongoing
+			AND rde.STATE = 2 -- current res ongoing
+			AND rde.contractstart < rds.contractend -- current res starts before the last one ends
+			AND rds.noenddate = 1 -- previous res has no end date
+			)
+		OR (
+			-- Where both reservations start on the same day and one or the other is still on-going (Neeeds SQL)
+			--
+			rde.contractstart = rds.contractstart
+			AND (
+				rds.STATE = 2
+				OR rde.STATE = 2
 				)
+			)
+		OR (
+			-- Where the previous reservation is ongoing, and stops after the beginning of the next reservation (Sometimes fixable on front-end)
+			--
+			rds.contractend > rde.contractstart
 			AND rds.STATE = 2
-			AND rde.contractstart < rds.contractend
+			AND rde.STATE NOT IN (1, 2)
 			)
 	),
 availablerentals
@@ -132,8 +168,7 @@ AS (
 				THEN '30000-09-30'
 			ELSE rde.contractstart
 			END AS availend,
-		rds.contractstart || ' --> ' || rds.contractend,
-		rde.contractstart || ' --> ' || rde.contractend,
+		rds.contractstart || ' --> ' || rds.contractend || ' || ' || rde.contractstart || ' --> ' || rde.contractend,
 		rds.STATE AS curritemstate,
 		rde.STATE AS nextritemstate
 	FROM rerentalitem ri
@@ -149,8 +184,7 @@ AS (
 		ri.rentaltypeid,
 		'10000-09-30' AS availstart,
 		'30000-09-30' AS availend,
-		'10000-09-30' || ' --> ' || '10000-09-30',
-		'30000-09-30' || ' --> ' || '30000-09-30',
+		'10000-09-30' || ' --> ' || '10000-09-30' || ' || ' || '30000-09-30' || ' --> ' || '30000-09-30',
 		1 AS curritemstate,
 		1 AS nextritemstate
 	FROM rerentalitem ri
@@ -168,9 +202,13 @@ AS (
 			ELSE 'No Match'
 			END AS perfectmatch,
 		pr.startconflict,
-		ar.availstart || ' --> ' AS availabilitystart,
-		'[ ' || pr.resitemstart || ' ===> ' || pr.resitemend || ' ]' AS badres_period,
-		' <-- ' ||	ar.availend AS availabilityend,
+		--
+		(ar.availstart || ' --> ') AS availabilitystart,
+		--
+		('[ ' || pr.resitemstart || ' ===> ' || pr.resitemend || ' ]') AS badres_period,
+		--
+		(' <-- ' || ar.availend) AS availabilityend,
+		--
 		ar.newitemnumber AS newitem_number,
 		row_Number() OVER (
 			PARTITION BY pr.rentalitemid ORDER BY CASE 
@@ -180,14 +218,11 @@ AS (
 					END ASC,
 				ar.newitemnumber ASC
 			) AS optionnumber,
-		--		row_Number() OVER (partition by ar.rentalitemid ORDER BY pr.rentalitemid ASC
-		--			) AS usednumber,
 		ar.*
 	FROM problemrentals pr
 	INNER JOIN rereservation r ON pr.reservationid = r.reservationid
 	LEFT JOIN availablerentals ar ON pr.resitemstart >= ar.availstart
 		AND ar.availend >= pr.resitemend
-		AND ar.rentaltypeid = pr.rentaltypeid
 	)
 SELECT *
 FROM resitems
