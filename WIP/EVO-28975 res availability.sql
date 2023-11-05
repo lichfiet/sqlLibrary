@@ -49,6 +49,7 @@ AS (
 	FROM rerentalitem ri
 	INNER JOIN rereservationitem resi ON resi.rentalitemid = ri.rentalitemid
 	),
+problemrentals
 	/* This CTE is used to compare the start and end time of rentals based on their end date, and their start dates to gauge whether there will be overlapping availability.
 It takes advantage of the row_number() function to compare the first reservation items, rds, to the items that were scheduled after them. The filters and case whens
 look for items where the end of the first reservation overlaps with the beginning of the next reservation. This includes items with no end date and the SQL
@@ -61,11 +62,7 @@ assums the end date is in the year 3000. The case whens are using to distinguish
     where the first item ends inbetween a stopped reservation is sometimes fixable in the system,
     and the second, where the first reservation is stopped, and the next one is on-going and started before the
     end of the first reservation, requires SQL.
-
-
-
-    */
-problemrentals
+*/
 AS (
 	SELECT ri.rentalitemnumber AS curritemnumber,
 		ri.rentaltypeid,
@@ -78,14 +75,10 @@ AS (
 				THEN rde.reservationid
 			ELSE rds.reservationid
 			END AS reservationid,
-		CASE 
-			WHEN (
-					rde.contractstart < rds.contractend
-					AND rde.STATE = 2
-					)
-				THEN rde.reservationitemid
-			ELSE rds.reservationitemid
-			END AS resitemid,
+		--
+		-- res item ids
+		Array [rds.reservationid, rde.reservationid] AS reservationids,
+		--
 		-- problem rentals dates start
 		CASE 
 			WHEN (
@@ -107,7 +100,7 @@ AS (
 			WHEN rds.contractstart = rde.contractstart
 				THEN 'Same day conflict'
 			ELSE 'N/A'
-			END AS startconflict
+			END AS startdateconflict
 	FROM rerentalitem ri
 	INNER JOIN reservationdates rds ON rds.itemid = ri.rentalitemid
 	LEFT JOIN reservationdates rde ON rde.itemid = rds.itemid -- join used to find the next reservation that occurred after a given reservation
@@ -193,7 +186,7 @@ AS (
 	),
 resitems
 AS (
-	SELECT r.reservationnumber AS resnumber,
+	SELECT 'Previous Res #: ' || rdsr.reservationnumber::varchar || ' overlaps with Current Res #: ' || rder.reservationnumber AS resnumbers,
 		pr.curritemnumber,
 		ar.newitemnumber,
 		CASE 
@@ -201,7 +194,7 @@ AS (
 				THEN 'Matched Types'
 			ELSE 'No Match'
 			END AS perfectmatch,
-		pr.startconflict,
+		pr.startdateconflict,
 		--
 		(ar.availstart || ' --> ') AS availabilitystart,
 		--
@@ -220,7 +213,8 @@ AS (
 			) AS optionnumber,
 		ar.*
 	FROM problemrentals pr
-	INNER JOIN rereservation r ON pr.reservationid = r.reservationid
+	INNER JOIN rereservation rdsr ON pr.reservationids[1] = rdsr.reservationid
+	LEFT JOIN rereservation rder ON pr.reservationids[2] = rder.reservationid
 	LEFT JOIN availablerentals ar ON pr.resitemstart >= ar.availstart
 		AND ar.availend >= pr.resitemend
 	)
