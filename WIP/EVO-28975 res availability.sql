@@ -44,7 +44,19 @@ AS (
 				AND resi.STATE NOT IN (1, 2)
 				THEN TO_CHAR(resi.contractstartdate, 'YYYY-MM-DD')
 			ELSE TO_CHAR(resi.contractenddate, 'YYYY-MM-DD') -- else, use the end date
-			END AS contractend
+			END AS contractend,
+		CASE resi.STATE
+			WHEN 1
+				THEN 'Future'
+			WHEN 2
+				THEN 'Ongoing'
+			WHEN 3
+				THEN 'Stopped'
+			WHEN 4
+				THEN 'Finalized'
+			WHEN 5
+				THEN 'Canceled'
+			END AS STATUS
 	--
 	FROM rerentalitem ri
 	INNER JOIN rereservationitem resi ON resi.rentalitemid = ri.rentalitemid
@@ -73,6 +85,7 @@ AS (
 		ri.rentalitemid,
 		ri.storeid,
 		Array [rds.reservationid, rde.reservationid] AS reservationids, -- res item ids
+		Array [rds.status, rde.status] AS reservationstatus, -- status of reservations
 		-- begin ultimate case whens
 		CASE 
 			WHEN (
@@ -246,7 +259,7 @@ AS (
 	),
 resitems
 AS (
-	SELECT 'Prev. Res #' || rdsr.reservationnumber::VARCHAR || ', Curr Res #' || rder.reservationnumber AS reservation_numbers,
+	SELECT 'Prev. Res #' || rdsr.reservationnumber || ', Curr. Res #' || rder.reservationnumber AS reservation_numbers,
 		pr.curritemnumber AS rental_item,
 		pr.textfields [4] AS conflict_type,
 		--
@@ -263,11 +276,10 @@ AS (
 		(' <-- ' || ar.availend) AS availability_end,
 		--
 		ar.newitemnumber AS newitem_number,
-		ar.availstart,
-		ar.availend,
 		ar.rentalitemid AS new_rentalitemid,
 		'Update Res #' || changeres.reservationnumber AS res_num_to_modify,
 		pr.intfields [1] AS reservationitemid_to_modify,
+		'Prev' || ': ' || pr.reservationstatus [1] || ' || Curr' || ': ' || pr.reservationstatus [2] AS reservation_numbers,
 		row_Number() OVER (
 			PARTITION BY pr.rentalitemid ORDER BY CASE 
 					WHEN ar.rentaltypeid = pr.rentaltypeid
