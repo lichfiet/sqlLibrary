@@ -68,6 +68,11 @@ AS (
 		ri.rentaltypeid,
 		ri.rentalitemid,
 		Array [rds.reservationid, rde.reservationid] AS reservationids, -- res item ids
+		CASE 
+			WHEN rds.contractstart = rde.contractstart
+				THEN 'Same day conflict'
+			ELSE 'N/A'
+			END AS startdateconflict,
 		-- begin ultimate case whens
 		CASE 
 			WHEN (
@@ -77,7 +82,7 @@ AS (
 					AND rde.STATE = 2 -- next res ongoing
 					AND rds.STATE NOT IN (1, 2) -- previous is stopped
 					)
-				THEN ARRAY [rde.contractstart, rde.contractend, 'current res starts before previous res end', 'Current res start overlap, previous stopped', 'test1']
+				THEN ARRAY [rde.contractstart, rde.contractend, 'current res starts before previous res end and previous is stopped', 'test1']
 			WHEN (
 					-- opt2
 					rds.STATE = 2 -- previous res ongoing
@@ -86,7 +91,7 @@ AS (
 					AND rde.contractstart != rds.contractstart
 					AND rds.noenddate = 1 -- previous res has no end date
 					)
-				THEN ARRAY [rds.contractstart, rds.contractend, 'previous item no end date and current started after', 'Previous item has no end date, Current Item Open', 'test2']
+				THEN ARRAY [rds.contractstart, rds.contractend, 'previous item no end date and current started after','test2']
 			WHEN (
 					-- opt3
 					rde.contractstart = rds.contractstart
@@ -95,14 +100,14 @@ AS (
 						OR rde.STATE = 2
 						)
 					)
-				THEN ARRAY [rde.contractstart, rde.contractend, 'reservations started same day, select items', CASE when rde.state = 2 and rds.state != 2 then 'Same day conflict, Current Item Open' when rds.state = 2 and rde.state != 2 then 'Same day conflict, Previous Item Open' WHEN rds.state = 2 and rde.state = 2 then 'Same day conflict, Both reservations on-going' END, 'test3 -- need to build out case when or add an additional to select which one is ongoing']
+				THEN ARRAY [rde.contractstart, rde.contractend, 'reservations started same day, select items', CASE when rde.state = 2 and rds.state != 2 then 'Current Item Open' when rds.state = 2 and rde.state != 2 then 'Previous Item Open' WHEN rds.state = 2 and rde.state = 2 then 'Both reservations on-going' END, 'test3 -- need to build out case when or add an additional to select which one is ongoing']
 			WHEN (
 					-- opt4
 					rds.contractend > rde.contractstart
 					AND rds.STATE = 2
 					AND rde.STATE NOT IN (1, 2)
 					)
-				THEN ARRAY [rds.contractstart, rds.contractend, 'previous reservation ends after the start of the current res and current is stopped', 'Previous res ends after Current, Current is stopped', 'test4']
+				THEN ARRAY [rds.contractstart, rds.contractend, 'previous reservation ends after the start of the current res and current has end date','test4']
 			END AS textfields,
 		--
 		-- begin number fields from case when
@@ -130,7 +135,7 @@ AS (
 						OR rde.STATE = 2
 						)
 					)
-				THEN ARRAY [rde.reservationitemid, CASE when rde.state = 2 and rds.state != 2 then rde.reservationid when rds.state = 2 and rde.state != 2 then rds.reservationid WHEN rds.state = 2 and rde.state = 2 then rds.reservationid END]
+				THEN ARRAY [rde.reservationitemid]
 			WHEN (
 					rds.contractend > rde.contractstart
 					AND rds.STATE = 2
@@ -225,21 +230,22 @@ AS (
 	),
 resitems
 AS (
-	SELECT 'Previous Res #' || rdsr.reservationnumber::VARCHAR || ' overlaps with Current Res #' || rder.reservationnumber AS reservation_numbers,
-		pr.curritemnumber AS rental_item,
-		pr.textfields [4] AS conflict_type,
-		--
+	SELECT 'Previous Res #' || rdsr.reservationnumber::VARCHAR || ' overlaps with Current Res #' || rder.reservationnumber AS resnumbers,
+		pr.curritemnumber,
 		ar.newitemnumber,
 		CASE 
 			WHEN left(ar.newitemnumber, 2) = left(pr.curritemnumber, 2)
 				THEN 'Matched Types'
 			ELSE 'No Match'
 			END AS perfectmatch,
-		(ar.availstart || ' --> ') AS availability_start,
+		pr.textfields[4],
+		pr.startdateconflict,
+		--
+		(ar.availstart || ' --> ') AS availabilitystart,
 		--
 		('[ ' || pr.textfields [1] || ' ===> ' || pr.textfields [2] || ' ]') AS badres_period,
 		--
-		(' <-- ' || ar.availend) AS availability_end,
+		(' <-- ' || ar.availend) AS availabilityend,
 		--
 		ar.newitemnumber AS newitem_number,
 		pr.textfields [3] AS description,
