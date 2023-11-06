@@ -225,16 +225,16 @@ AS (
 	),
 resitems
 AS (
-	SELECT 'Previous Res #' || rdsr.reservationnumber::VARCHAR || ' overlaps with Current Res #' || rder.reservationnumber AS reservation_numbers,
+	SELECT 'Prev. Res #' || rdsr.reservationnumber::VARCHAR || ', Curr Res #' || rder.reservationnumber AS reservation_numbers,
 		pr.curritemnumber AS rental_item,
 		pr.textfields [4] AS conflict_type,
 		--
 		ar.newitemnumber,
 		CASE 
-			WHEN left(ar.newitemnumber, 2) = left(pr.curritemnumber, 2)
+			WHEN ar.rentaltypeid = pr.rentaltypeid
 				THEN 'Matched Types'
 			ELSE 'No Match'
-			END AS perfectmatch,
+			END AS availability_itemtype_match,
 		(ar.availstart || ' --> ') AS availability_start,
 		--
 		('[ ' || pr.textfields [1] || ' ===> ' || pr.textfields [2] || ' ]') AS badres_period,
@@ -242,9 +242,10 @@ AS (
 		(' <-- ' || ar.availend) AS availability_end,
 		--
 		ar.newitemnumber AS newitem_number,
-		pr.textfields [3] AS description,
 		ar.availstart,
 		ar.availend,
+		ar.rentalitemid AS newitemid,
+		pr.intfields [1] AS reservationitemid,
 		row_Number() OVER (
 			PARTITION BY pr.rentalitemid ORDER BY CASE 
 					WHEN left(ar.newitemnumber, 2) = left(pr.curritemnumber, 2)
@@ -252,13 +253,17 @@ AS (
 					ELSE '1'
 					END ASC,
 				ar.newitemnumber ASC
-			) AS optionnumber
+			) AS optionnumber,
+		row_Number() OVER (
+			PARTITION BY ar.rentalitemid ORDER BY pr.curritemnumber
+			) AS testnumber
 	FROM problemrentals pr
 	INNER JOIN rereservation rdsr ON pr.reservationids [1] = rdsr.reservationid
 	LEFT JOIN rereservation rder ON pr.reservationids [2] = rder.reservationid
 	LEFT JOIN availablerentals ar ON pr.textfields [1] > ar.availstart
 		AND ar.availend >= pr.textfields [2]
+	ORDER BY pr.curritemnumber ASC
 	)
 SELECT *
-FROM resitems
-WHERE optionnumber = 1
+FROM resitems ri
+WHERE ri.optionnumber = 1
