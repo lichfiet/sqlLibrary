@@ -275,7 +275,6 @@ AS (
 		--
 		(' <-- ' || ar.availend) AS availability_end,
 		--
-		ar.newitemnumber AS newitem_number,
 		ar.rentalitemid AS new_rentalitemid,
 		'Update Res #' || changeres.reservationnumber AS res_num_to_modify,
 		pr.intfields [1] AS reservationitemid_to_modify,
@@ -287,15 +286,12 @@ AS (
 					ELSE '1'
 					END ASC,
 				ar.newitemnumber ASC
-			) AS optionnumber,
-		row_Number() OVER (
-			PARTITION BY ar.rentalitemid ORDER BY pr.curritemnumber
-			) AS testnumber
+			) AS optionnumber
 	FROM problemrentals pr
 	INNER JOIN rereservation rdsr ON pr.reservationids [1] = rdsr.reservationid
 	LEFT JOIN rereservation rder ON pr.reservationids [2] = rder.reservationid
 	LEFT JOIN rereservation changeres ON pr.intfields [2] = changeres.reservationid
-	LEFT JOIN availablerentals ar ON pr.textfields [1] > ar.availstart
+	LEFT JOIN availablerentals ar ON pr.textfields [1] >= ar.availstart
 		AND ar.availend >= pr.textfields [2]
 		AND ar.storeid = pr.storeid
 	ORDER BY pr.curritemnumber ASC
