@@ -248,7 +248,7 @@ AS (
 		pr.intfields [1] AS reservationitemid,
 		row_Number() OVER (
 			PARTITION BY pr.rentalitemid ORDER BY CASE 
-					WHEN left(ar.newitemnumber, 2) = left(pr.curritemnumber, 2)
+					WHEN ar.rentaltypeid = pr.rentaltypeid
 						THEN '0'
 					ELSE '1'
 					END ASC,
