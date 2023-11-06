@@ -67,40 +67,77 @@ AS (
 	SELECT ri.rentalitemnumber AS curritemnumber,
 		ri.rentaltypeid,
 		ri.rentalitemid,
+		Array [rds.reservationid, rde.reservationid] AS reservationids, -- res item ids
+		-- begin ultimate case whens
 		CASE 
 			WHEN (
+					-- opt1
 					rde.contractstart < rds.contractend
-					AND rde.STATE = 2
+					AND rde.contractstart != rds.contractstart
+					AND rde.STATE = 2 -- next res ongoing
+					AND rds.STATE NOT IN (1, 2) -- previous is stopped
 					)
-				THEN rde.reservationid
-			ELSE rds.reservationid
-			END AS reservationid,
+				THEN ARRAY [rde.contractstart, rde.contractend, 'current res starts before previous res end', 'test1']
+			WHEN (
+					-- opt2
+					rds.STATE = 2 -- previous res ongoing
+					AND rde.STATE = 2 -- current res ongoing
+					AND rde.contractstart < rds.contractend -- current res starts before the last one ends
+					AND rde.contractstart != rds.contractstart
+					AND rds.noenddate = 1 -- previous res has no end date
+					)
+				THEN ARRAY [rds.contractstart, rds.contractend, 'previous item no end date and current started after','test2']
+			WHEN (
+					-- opt3
+					rde.contractstart = rds.contractstart
+					AND (
+						rds.STATE = 2
+						OR rde.STATE = 2
+						)
+					)
+				THEN ARRAY [rde.contractstart, rde.contractend, 'reservations started same day, select items', CASE when rde.state = 2 and rds.state != 2 then 'Same day conflict, Current Item Open' when rds.state = 2 and rde.state != 2 then 'Same day conflict, Previous Item Open' WHEN rds.state = 2 and rde.state = 2 then 'Same day conflict, Both reservations on-going' END, 'test3 -- need to build out case when or add an additional to select which one is ongoing']
+			WHEN (
+					-- opt4
+					rds.contractend > rde.contractstart
+					AND rds.STATE = 2
+					AND rde.STATE NOT IN (1, 2)
+					)
+				THEN ARRAY [rds.contractstart, rds.contractend, 'previous reservation ends after the start of the current res and current is stopped','test4']
+			END AS textfields,
 		--
-		-- res item ids
-		Array [rds.reservationid, rde.reservationid] AS reservationids,
+		-- begin number fields from case when
 		--
-		-- problem rentals dates start
 		CASE 
 			WHEN (
 					rde.contractstart < rds.contractend
-					AND rde.STATE = 2
+					AND rde.contractstart != rds.contractstart
+					AND rde.STATE = 2 -- next res ongoing
+					AND rds.STATE NOT IN (1, 2) -- previous is stopped
 					)
-				THEN rde.contractstart
-			ELSE rds.contractstart
-			END AS resitemstart,
-		CASE 
+				THEN ARRAY [rde.reservationitemid]
 			WHEN (
-					rde.contractstart < rds.contractend
-					AND rde.STATE = 2
+					rds.STATE = 2 -- previous res ongoing
+					AND rde.STATE = 2 -- current res ongoing
+					AND rde.contractstart < rds.contractend -- current res starts before the last one ends
+					AND rde.contractstart != rds.contractstart
+					AND rds.noenddate = 1 -- previous res has no end date
 					)
-				THEN rde.contractend
-			ELSE rds.contractend
-			END AS resitemend,
-		CASE 
-			WHEN rds.contractstart = rde.contractstart
-				THEN 'Same day conflict'
-			ELSE 'N/A'
-			END AS startdateconflict
+				THEN ARRAY [rds.reservationitemid]
+			WHEN (
+					rde.contractstart = rds.contractstart
+					AND (
+						rds.STATE = 2
+						OR rde.STATE = 2
+						)
+					)
+				THEN ARRAY [rde.reservationitemid, CASE when rde.state = 2 and rds.state != 2 then rde.reservationid when rds.state = 2 and rde.state != 2 then rds.reservationid WHEN rds.state = 2 and rde.state = 2 then rds.reservationid END]
+			WHEN (
+					rds.contractend > rde.contractstart
+					AND rds.STATE = 2
+					AND rde.STATE NOT IN (1, 2)
+					)
+				THEN ARRAY [rds.reservationitemid]
+			END AS intfields
 	FROM rerentalitem ri
 	INNER JOIN reservationdates rds ON rds.itemid = ri.rentalitemid
 	LEFT JOIN reservationdates rde ON rde.itemid = rds.itemid -- join used to find the next reservation that occurred after a given reservation
@@ -112,6 +149,7 @@ AS (
 			-- Where the current reservation is ongoing, and starts before the end of the previous reservation (Needs SQL)
 			--
 			rde.contractstart < rds.contractend
+			AND rde.contractstart != rds.contractstart
 			AND rde.STATE = 2 -- next res ongoing
 			AND rds.STATE NOT IN (1, 2) -- previous is stopped
 			)
@@ -121,6 +159,7 @@ AS (
 			rds.STATE = 2 -- previous res ongoing
 			AND rde.STATE = 2 -- current res ongoing
 			AND rde.contractstart < rds.contractend -- current res starts before the last one ends
+			AND rde.contractstart != rds.contractstart
 			AND rds.noenddate = 1 -- previous res has no end date
 			)
 		OR (
@@ -186,7 +225,7 @@ AS (
 	),
 resitems
 AS (
-	SELECT 'Previous Res #: ' || rdsr.reservationnumber::varchar || ' overlaps with Current Res #: ' || rder.reservationnumber AS resnumbers,
+	SELECT 'Previous Res #' || rdsr.reservationnumber::VARCHAR || ' overlaps with Current Res #' || rder.reservationnumber AS resnumbers,
 		pr.curritemnumber,
 		ar.newitemnumber,
 		CASE 
@@ -194,15 +233,18 @@ AS (
 				THEN 'Matched Types'
 			ELSE 'No Match'
 			END AS perfectmatch,
-		pr.startdateconflict,
+		pr.textfields [4] AS conflicttype,
 		--
 		(ar.availstart || ' --> ') AS availabilitystart,
 		--
-		('[ ' || pr.resitemstart || ' ===> ' || pr.resitemend || ' ]') AS badres_period,
+		('[ ' || pr.textfields [1] || ' ===> ' || pr.textfields [2] || ' ]') AS badres_period,
 		--
 		(' <-- ' || ar.availend) AS availabilityend,
 		--
 		ar.newitemnumber AS newitem_number,
+		pr.textfields [3] AS description,
+		pr.textfields,
+		ar.*,
 		row_Number() OVER (
 			PARTITION BY pr.rentalitemid ORDER BY CASE 
 					WHEN left(ar.newitemnumber, 2) = left(pr.curritemnumber, 2)
@@ -210,13 +252,12 @@ AS (
 					ELSE '1'
 					END ASC,
 				ar.newitemnumber ASC
-			) AS optionnumber,
-		ar.*
+			) AS optionnumber
 	FROM problemrentals pr
-	INNER JOIN rereservation rdsr ON pr.reservationids[1] = rdsr.reservationid
-	LEFT JOIN rereservation rder ON pr.reservationids[2] = rder.reservationid
-	LEFT JOIN availablerentals ar ON pr.resitemstart >= ar.availstart
-		AND ar.availend >= pr.resitemend
+	INNER JOIN rereservation rdsr ON pr.reservationids [1] = rdsr.reservationid
+	LEFT JOIN rereservation rder ON pr.reservationids [2] = rder.reservationid
+	LEFT JOIN availablerentals ar ON pr.textfields [1] >= ar.availstart
+		AND ar.availend >= pr.textfields [2]
 	)
 SELECT *
 FROM resitems
