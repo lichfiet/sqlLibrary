@@ -265,7 +265,7 @@ AS (
 		ar.newitemnumber AS newitem_number,
 		ar.availstart,
 		ar.availend,
-		ar.rentalitemid AS new_itemid,
+		ar.rentalitemid AS new_rentalitemid,
 		'Update Res #' || changeres.reservationnumber AS res_num_to_modify,
 		pr.intfields [1] AS reservationitemid_to_modify,
 		row_Number() OVER (
