@@ -243,8 +243,8 @@ AS (
 		--
 		ar.newitemnumber AS newitem_number,
 		pr.textfields [3] AS description,
-		pr.textfields,
-		ar.*,
+		ar.availstart,
+		ar.availend,
 		row_Number() OVER (
 			PARTITION BY pr.rentalitemid ORDER BY CASE 
 					WHEN left(ar.newitemnumber, 2) = left(pr.curritemnumber, 2)
@@ -256,7 +256,7 @@ AS (
 	FROM problemrentals pr
 	INNER JOIN rereservation rdsr ON pr.reservationids [1] = rdsr.reservationid
 	LEFT JOIN rereservation rder ON pr.reservationids [2] = rder.reservationid
-	LEFT JOIN availablerentals ar ON pr.textfields [1] >= ar.availstart
+	LEFT JOIN availablerentals ar ON pr.textfields [1] > ar.availstart
 		AND ar.availend >= pr.textfields [2]
 	)
 SELECT *
