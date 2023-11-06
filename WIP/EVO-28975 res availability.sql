@@ -48,7 +48,7 @@ AS (
 	--
 	FROM rerentalitem ri
 	INNER JOIN rereservationitem resi ON resi.rentalitemid = ri.rentalitemid
-	WHERE STATE != 5
+	WHERE STATE NOT IN (5)
 	),
 problemrentals
 	/* This CTE is used to compare the start and end time of rentals based on their end date, and their start dates to gauge whether there will be overlapping availability.
@@ -79,14 +79,14 @@ AS (
 					-- opt1
 					rde.contractstart < rds.contractend
 					AND rde.contractstart != rds.contractstart
-					AND rde.STATE = 2 -- next res ongoing
-					AND rds.STATE != 2 -- previous is stopped
+					AND rde.STATE IN (1, 2) -- next res ongoing
+					AND rds.STATE NOT IN (1, 2) -- previous is stopped
 					)
 				THEN ARRAY [rde.contractstart, rde.contractend, 'current res starts before previous res end', 'Current res start overlap, previous stopped', 'test1']
 			WHEN (
 					-- opt2
-					rds.STATE = 2 -- previous res ongoing
-					AND rde.STATE = 2 -- current res ongoing
+					rds.STATE IN (1, 2) -- previous res ongoing
+					AND rde.STATE IN (1, 2) -- current res ongoing
 					AND rde.contractstart < rds.contractend -- current res starts before the last one ends
 					AND rde.contractstart != rds.contractstart
 					AND rds.noenddate = 1 -- previous res has no end date
@@ -96,16 +96,16 @@ AS (
 					-- opt3
 					rde.contractstart = rds.contractstart
 					AND (
-						rds.STATE = 2
-						OR rde.STATE = 2
+						rds.STATE IN (1, 2)
+						OR rde.STATE IN (1, 2)
 						)
 					)
-				THEN ARRAY [rde.contractstart, rde.contractend, 'reservations started same day, select items', CASE when rde.state = 2 and rds.state != 2 then 'Same day conflict, Current Item Open' when rds.state = 2 and rde.state != 2 then 'Same day conflict, Previous Item Open' WHEN rds.state = 2 and rde.state = 2 then 'Same day conflict, Both reservations on-going' END, 'test3 -- need to build out case when or add an additional to select which one is ongoing']
+				THEN ARRAY [rde.contractstart, rde.contractend, 'reservations started same day, select items', CASE when rde.state IN (1, 2) and rds.state NOT IN (1, 2) then 'Same day conflict, Current Item Open' when rds.state IN (1, 2) and rde.state NOT IN (1, 2) then 'Same day conflict, Previous Item Open' WHEN rds.state IN (1, 2) and rde.state IN (1, 2) then 'Same day conflict, Both reservations on-going' END, 'test3 -- need to build out case when or add an additional to select which one is ongoing']
 			WHEN (
 					-- opt4
 					rds.contractend > rde.contractstart
-					AND rds.STATE = 2
-					AND rde.STATE != 2
+					AND rds.STATE IN (1, 2)
+					AND rde.STATE NOT IN (1, 2)
 					)
 				THEN ARRAY [rds.contractstart, rds.contractend, 'previous reservation ends after the start of the current res and current is stopped', 'Previous res ends after Current, Current is stopped', 'test4']
 			END AS textfields,
@@ -116,13 +116,13 @@ AS (
 			WHEN (
 					rde.contractstart < rds.contractend
 					AND rde.contractstart != rds.contractstart
-					AND rde.STATE = 2 -- next res ongoing
-					AND rds.STATE != 2 -- previous is stopped
+					AND rde.STATE IN (1, 2) -- next res ongoing
+					AND rds.STATE NOT IN (1, 2) -- previous is stopped
 					)
 				THEN ARRAY [rde.reservationitemid, rde.reservationid]
 			WHEN (
-					rds.STATE = 2 -- previous res ongoing
-					AND rde.STATE = 2 -- current res ongoing
+					rds.STATE IN (1, 2) -- previous res ongoing
+					AND rde.STATE IN (1, 2) -- current res ongoing
 					AND rde.contractstart < rds.contractend -- current res starts before the last one ends
 					AND rde.contractstart != rds.contractstart
 					AND rds.noenddate = 1 -- previous res has no end date
@@ -131,27 +131,27 @@ AS (
 			WHEN (
 					rde.contractstart = rds.contractstart
 					AND (
-						rds.STATE = 2
-						OR rde.STATE = 2
+						rds.STATE IN (1, 2)
+						OR rde.STATE IN (1, 2)
 						)
 					)
 				THEN (
 						CASE 
-							WHEN rde.STATE = 2
-								AND rds.STATE != 2
+							WHEN rde.STATE IN (1, 2)
+								AND rds.STATE NOT IN (1, 2)
 								THEN ARRAY [rde.reservationitemid, rde.reservationid]
-							WHEN rds.STATE = 2
-								AND rde.STATE != 2
+							WHEN rds.STATE IN (1, 2)
+								AND rde.STATE NOT IN (1, 2)
 								THEN ARRAY [rds.reservationitemid, rds.reservationid]
-							WHEN rds.STATE = 2
-								AND rde.STATE = 2
+							WHEN rds.STATE IN (1, 2)
+								AND rde.STATE IN (1, 2)
 								THEN ARRAY [rds.reservationitemid, rds.reservationid]
 							END
 						)
 			WHEN (
 					rds.contractend > rde.contractstart
-					AND rds.STATE = 2
-					AND rde.STATE != 2
+					AND rds.STATE IN (1, 2)
+					AND rde.STATE NOT IN (1, 2)
 					)
 				THEN ARRAY [rds.reservationitemid, rds.reservationid]
 			END AS intfields
@@ -167,14 +167,14 @@ AS (
 			--
 			rde.contractstart < rds.contractend
 			AND rde.contractstart != rds.contractstart
-			AND rde.STATE = 2 -- next res ongoing
-			AND rds.STATE != 2 -- previous is stopped
+			AND rde.STATE IN (1, 2) -- next res ongoing
+			AND rds.STATE NOT IN (1, 2) -- previous is stopped
 			)
 		OR (
 			-- Where both reservations are ongoing, and the current one was started after a previous reservation with no end date (Sometimes fixable on front-end)
 			--
-			rds.STATE = 2 -- previous res ongoing
-			AND rde.STATE = 2 -- current res ongoing
+			rds.STATE IN (1, 2) -- previous res ongoing
+			AND rde.STATE IN (1, 2) -- current res ongoing
 			AND rde.contractstart < rds.contractend -- current res starts before the last one ends
 			AND rde.contractstart != rds.contractstart
 			AND rds.noenddate = 1 -- previous res has no end date
@@ -184,16 +184,16 @@ AS (
 			--
 			rde.contractstart = rds.contractstart
 			AND (
-				rds.STATE = 2
-				OR rde.STATE = 2
+				rds.STATE IN (1, 2)
+				OR rde.STATE IN (1, 2)
 				)
 			)
 		OR (
 			-- Where the previous reservation is ongoing, and stops after the beginning of the next reservation (Sometimes fixable on front-end)
 			--
 			rds.contractend > rde.contractstart
-			AND rds.STATE = 2
-			AND rde.STATE != 2
+			AND rds.STATE IN (1, 2)
+			AND rde.STATE NOT IN (1, 2)
 			)
 	),
 availablerentals
