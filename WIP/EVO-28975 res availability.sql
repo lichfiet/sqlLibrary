@@ -52,16 +52,19 @@ AS (
 problemrentals
 	/* This CTE is used to compare the start and end time of rentals based on their end date, and their start dates to gauge whether there will be overlapping availability.
 It takes advantage of the row_number() function to compare the first reservation items, rds, to the items that were scheduled after them. The filters and case whens
-look for items where the end of the first reservation overlaps with the beginning of the next reservation. This includes items with no end date and the SQL
-assums the end date is in the year 3000. The case whens are using to distinguish between the two types of overlapping availability which are:
+look for items where any reservations overlap with one-another. The case whens are using to distinguish between the 4 types of overlapping availability which are:
 
-1. items with no end date that have reservations scheduled during them or at the same time as them,
-    or where they start inbetween a stopped reservation
+1. Where the current reservation is ongoing, and starts before the end of the previous reservation (Needs SQL)
     
-2. Items with an end date, where they overlap, but one or the other is stopped. The first variation
-    where the first item ends inbetween a stopped reservation is sometimes fixable in the system,
-    and the second, where the first reservation is stopped, and the next one is on-going and started before the
-    end of the first reservation, requires SQL.
+2. Where both reservations are ongoing, and the current one was started after a previous reservation with no end date (Sometimes fixable on front-end)
+
+3. Where both reservations start on the same day and one or the other is still on-going (Neeeds SQL)
+
+4. Where the previous reservation is ongoing, and stops after the beginning of the next reservation (Sometimes fixable on front-end)
+
+There are two main case whens that return arrays, the first is the varchar fields, and the second is the int fields, the
+query used to return information uses these fields as well as the availability finder. It will select the array[nth] item
+for each piece of data because the  information returned is relative to the type of overlapping availability
 */
 AS (
 	SELECT ri.rentalitemnumber AS curritemnumber,
@@ -180,6 +183,8 @@ AS (
 			)
 	),
 availablerentals
+/* This case when is used to identify rental items, that do not have a schedule reservation within the time-frame of one of the reservations with issues
+this is usually either the only reservation that is open of the two, or the previous reservation. Items that have no history at all will be populated*/
 AS (
 	SELECT ri.rentalitemnumber AS newitemnumber,
 		ri.itemdescription,
