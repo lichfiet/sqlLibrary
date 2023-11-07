@@ -65,25 +65,22 @@ AS (
 				THEN TO_CHAR(resi.contractstartdate, 'YYYY-MM-DD')
 			ELSE TO_CHAR(resi.contractenddate, 'YYYY-MM-DD') -- else, use the end date
 			END AS contractend,
-		CASE resi.STATE
-			WHEN 1
+		CASE 
+			WHEN resi.state = 1
 				THEN 'Future'
-			WHEN 2
+			WHEN resi.state = 2
 				THEN 'Ongoing'
-			WHEN 3
-				THEN 'Stopped'
-			WHEN 4
-				THEN 'Finalized'
-			WHEN 5
-				THEN 'Canceled'
-			ELSE 'AHHH'
+			WHEN resi.state = 3
+				THEN 'idk'
+			WHEN resi.state = 4
+				THEN 'Stopped/Finalized'
+			ELSE resi.state::varchar
 			END AS STATUS,
 		r.reservationnumber
 	--
 	FROM rerentalitem ri
 	INNER JOIN rereservationitem resi ON resi.rentalitemid = ri.rentalitemid
 	INNER JOIN rereservation r ON r.reservationid = resi.reservationid
-	WHERE STATE NOT IN (5)
 	),
 problemrentals
 	/* This CTE is used to compare the start and end time of rentals based on their end date, and their start dates to gauge whether there will be overlapping availability.
@@ -319,6 +316,9 @@ AS (
 	--
 	WHERE (
 			CASE 
+				WHEN s.reservationnumber = 'CHANGE ME'
+					AND s.reservationnumbers = ARRAY ['CHANGE ME', 'CHANGE ME', '...']
+					THEN 1
 				WHEN s.reservationnumber != 'CHANGE ME'
 					AND s.reservationnumber = rdsr.reservationnumber::VARCHAR
 					THEN 1
@@ -327,12 +327,7 @@ AS (
 					THEN 1
 				WHEN s.reservationnumbers != ARRAY ['CHANGE ME', 'CHANGE ME', '...']
 					AND rdsr.reservationnumber::VARCHAR = ANY (s.reservationnumbers)
-					THEN 1
-				WHEN s.reservationnumbers != ARRAY ['CHANGE ME', 'CHANGE ME', '...']
-					AND rder.reservationnumber::VARCHAR = ANY (s.reservationnumbers)
-					THEN 1
-				WHEN s.reservationnumber = 'CHANGE ME'
-					AND s.reservationnumbers = ARRAY ['CHANGE ME', 'CHANGE ME', '...']
+					OR rder.reservationnumber::VARCHAR = ANY (s.reservationnumbers)
 					THEN 1
 				ELSE 0
 				END
