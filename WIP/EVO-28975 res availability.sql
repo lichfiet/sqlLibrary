@@ -13,8 +13,7 @@ To use, you can either copy and past the SQL and look for your item in the retur
 or change the text that says CHANGE ME in the SQL below. */
 WITH searchdata
 AS (
-	SELECT ('CHANGE ME') AS reservationnumber, -- Use this line to search for one reservation
-		ARRAY ['CHANGE ME', 'CHANGE ME', '...'] AS reservationnumbers -- Use this line to search for multiple reservations
+	SELECT ARRAY ['CHANGE ME'] AS reservationnumbers -- Use this line to search for multiple reservations
 	),
 reservationdates
 	/*
@@ -66,15 +65,15 @@ AS (
 			ELSE TO_CHAR(resi.contractenddate, 'YYYY-MM-DD') -- else, use the end date
 			END AS contractend,
 		CASE 
-			WHEN resi.state = 1
+			WHEN resi.STATE = 1
 				THEN 'Future'
-			WHEN resi.state = 2
+			WHEN resi.STATE = 2
 				THEN 'Ongoing'
-			WHEN resi.state = 3
+			WHEN resi.STATE = 3
 				THEN 'idk'
-			WHEN resi.state = 4
+			WHEN resi.STATE = 4
 				THEN 'Stopped/Finalized'
-			ELSE resi.state::varchar
+			ELSE resi.STATE::VARCHAR
 			END AS STATUS,
 		r.reservationnumber
 	--
@@ -316,16 +315,9 @@ AS (
 	--
 	WHERE (
 			CASE 
-				WHEN s.reservationnumber = 'CHANGE ME'
-					AND s.reservationnumbers = ARRAY ['CHANGE ME', 'CHANGE ME', '...']
+				WHEN s.reservationnumbers = ARRAY ['CHANGE ME']
 					THEN 1
-				WHEN s.reservationnumber != 'CHANGE ME'
-					AND s.reservationnumber = rdsr.reservationnumber::VARCHAR
-					THEN 1
-				WHEN s.reservationnumber != 'CHANGE ME'
-					AND s.reservationnumber = rder.reservationnumber::VARCHAR
-					THEN 1
-				WHEN s.reservationnumbers != ARRAY ['CHANGE ME', 'CHANGE ME', '...']
+				WHEN s.reservationnumbers != ARRAY ['CHANGE ME']
 					AND rdsr.reservationnumber::VARCHAR = ANY (s.reservationnumbers)
 					OR rder.reservationnumber::VARCHAR = ANY (s.reservationnumbers)
 					THEN 1
