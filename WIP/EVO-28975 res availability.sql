@@ -56,10 +56,13 @@ AS (
 				THEN 'Finalized'
 			WHEN 5
 				THEN 'Canceled'
-			END AS STATUS
+			ELSE 'AHHH'
+			END AS STATUS,
+			r.reservationnumber
 	--
 	FROM rerentalitem ri
 	INNER JOIN rereservationitem resi ON resi.rentalitemid = ri.rentalitemid
+	INNER JOIN rereservation r on r.reservationid = resi.reservationid
 	WHERE STATE NOT IN (5)
 	),
 problemrentals
@@ -95,7 +98,7 @@ AS (
 					AND rde.STATE IN (1, 2) -- next res ongoing
 					AND rds.STATE NOT IN (1, 2) -- previous is stopped
 					)
-				THEN ARRAY [rde.contractstart, rde.contractend, 'current res starts before previous res end', 'Current res start overlap, previous stopped', 'test1']
+				THEN ARRAY [rde.contractstart, rde.contractend, 'current res starts before previous res end', 'Reservation #' || rde.reservationnumber || ' started before reservation #' || rds.reservationnumber || ' ended', 'test1']
 			WHEN (
 					-- opt2
 					rds.STATE IN (1, 2) -- previous res ongoing
@@ -104,7 +107,7 @@ AS (
 					AND rde.contractstart != rds.contractstart
 					AND rds.noenddate = 1 -- previous res has no end date
 					)
-				THEN ARRAY [rds.contractstart, rds.contractend, 'previous item no end date and current started after', 'Previous item has no end date, Current Item Open', 'test2']
+				THEN ARRAY [rds.contractstart, rds.contractend, '', 'Reservation #' || rds.reservationnumber || ' has no end date and reservation #' || rde.reservationnumber || ' was started after it', 'test2']
 			WHEN (
 					-- opt3
 					rde.contractstart = rds.contractstart
@@ -113,14 +116,14 @@ AS (
 						OR rde.STATE IN (1, 2)
 						)
 					)
-				THEN ARRAY [rde.contractstart, rde.contractend, 'reservations started same day, select items', CASE when rde.state IN (1, 2) and rds.state NOT IN (1, 2) then 'Same day conflict, Current Item Open' when rds.state IN (1, 2) and rde.state NOT IN (1, 2) then 'Same day conflict, Previous Item Open' WHEN rds.state IN (1, 2) and rde.state IN (1, 2) then 'Same day conflict, Both reservations on-going' END, 'test3 -- need to build out case when or add an additional to select which one is ongoing']
+				THEN ARRAY [rde.contractstart, rde.contractend, 'reservations started same day, select items', CASE when rde.state IN (1, 2) and rds.state NOT IN (1, 2) then 'Reservations #' || rds.reservationnumber || ' and #' || rde.reservationnumber || ' start on the same day, and #' || rde.reservationnumber || ' is not stopped' when rds.state IN (1, 2) and rde.state NOT IN (1, 2) then 'Reservations #' || rds.reservationnumber || ' and #' || rde.reservationnumber || ' start on the same day, and #' || rds.reservationnumber || ' is not stopped' WHEN rds.state IN (1, 2) and rde.state IN (1, 2) then 'Reservations #' || rds.reservationnumber || ' and #' || rde.reservationnumber || ' start on the same day, and both reservations are on-going' END, 'test3 -- need to build out case when or add an additional to select which one is ongoing']
 			WHEN (
 					-- opt4
 					rds.contractend > rde.contractstart
 					AND rds.STATE IN (1, 2)
 					AND rde.STATE NOT IN (1, 2)
 					)
-				THEN ARRAY [rds.contractstart, rds.contractend, 'previous reservation ends after the start of the current res and current is stopped', 'Previous res ends after Current, Current is stopped', 'test4']
+				THEN ARRAY [rds.contractstart, rds.contractend, 'previous reservation ends after the start of the current res and current is stopped', 'Reservation #' || rds.reservationnumber || ' ends after reservation #' || rde.reservationnumber || ' which is currently stopped' ,'test4']
 			END AS textfields,
 		--
 		-- begin number fields from case when
@@ -259,25 +262,24 @@ AS (
 	),
 resitems
 AS (
-	SELECT 'Prev. Res #' || rdsr.reservationnumber || ', Curr. Res #' || rder.reservationnumber AS reservation_numbers,
-		pr.curritemnumber AS rental_item,
-		pr.textfields [4] AS conflict_type,
+	SELECT 'Rental Item: ' || pr.curritemnumber AS rental_item,
+	    pr.textfields [4] AS conflict_description,
 		--
-		ar.newitemnumber,
+		'Availability for reservation #' || changeres.reservationnumber || ' exists on rental item: ' || ar.newitemnumber AS availability,
 		CASE 
 			WHEN ar.rentaltypeid = pr.rentaltypeid
-				THEN 'Matched Types'
-			ELSE 'No Match'
-			END AS availability_itemtype_match,
-		(ar.availstart || ' --> ') AS availability_start,
+				THEN 'Yes'
+			ELSE 'No'
+			END AS new_item_matches_type,
+	    'Availability: ' || ar.availstart || ' --> ' AS new_item_availability_start,
 		--
-		('[ ' || pr.textfields [1] || ' ===> ' || pr.textfields [2] || ' ]') AS badres_period,
+		('[ ' || pr.textfields [1] || ' ===> ' || pr.textfields [2] || ' ]') AS bad_reservation_dates,
 		--
-		(' <-- ' || ar.availend) AS availability_end,
+		(' <-- ' || ar.availend) AS new_item_availability_end,
 		--
+		'To Resolve, Update Res #' || changeres.reservationnumber AS res_num_to_modify,
 		ar.rentalitemid AS new_rentalitemid,
-		'Update Res #' || changeres.reservationnumber AS res_num_to_modify,
-		pr.intfields [1] AS reservationitemid_to_modify,
+		pr.intfields [1] AS reservationitemid_to_update,
 		'Prev' || ': ' || pr.reservationstatus [1] || ' || Curr' || ': ' || pr.reservationstatus [2] AS reservation_numbers,
 		row_Number() OVER (
 			PARTITION BY pr.rentalitemid ORDER BY CASE 
