@@ -16,9 +16,8 @@ AS (
 	SELECT ('CHANGE ME') AS reservationnumber, -- Use this line to search for one reservation
 		ARRAY ['CHANGE ME', 'CHANGE ME', '...'] AS reservationnumbers -- Use this line to search for multiple reservations
 	),
+reservationdates
 	/*
-
-INFO FOR FIRST CTE:
 
 This first CTE will select all reservation items for a reservation 
 
@@ -33,7 +32,6 @@ The same case when is used for finding the items start and end dates, because it
 are stopped with no end date have an end date = to 1000-01-01, so the case when populates
 the date it was started as the stop date.
 */
-reservationdates
 AS (
 	SELECT resi.reservationitemid, -- reservationitemid of current reservation item
 		resi.rentalitemid AS itemid, -- rentalitemid assigned to the reservation
@@ -323,19 +321,19 @@ AS (
 			CASE 
 				WHEN s.reservationnumber != 'CHANGE ME'
 					AND s.reservationnumber = rdsr.reservationnumber::VARCHAR
-				THEN 1
+					THEN 1
 				WHEN s.reservationnumber != 'CHANGE ME'
 					AND s.reservationnumber = rder.reservationnumber::VARCHAR
-				THEN 1
+					THEN 1
 				WHEN s.reservationnumbers != ARRAY ['CHANGE ME', 'CHANGE ME', '...']
-					AND rdsr.reservationnumber::VARCHAR = ANY(s.reservationnumbers)
-				THEN 1
+					AND rdsr.reservationnumber::VARCHAR = ANY (s.reservationnumbers)
+					THEN 1
 				WHEN s.reservationnumbers != ARRAY ['CHANGE ME', 'CHANGE ME', '...']
-					AND rder.reservationnumber::VARCHAR = ANY(s.reservationnumbers)
-				THEN 1
+					AND rder.reservationnumber::VARCHAR = ANY (s.reservationnumbers)
+					THEN 1
 				WHEN s.reservationnumber = 'CHANGE ME'
-				AND s.reservationnumbers = ARRAY ['CHANGE ME', 'CHANGE ME', '...']
-				THEN 1
+					AND s.reservationnumbers = ARRAY ['CHANGE ME', 'CHANGE ME', '...']
+					THEN 1
 				ELSE 0
 				END
 			) = 1
