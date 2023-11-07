@@ -1,4 +1,26 @@
-/* This first CTE will select all reservation items for a reservation 
+/* INFORMATION:
+
+The purpose of this diagnostic is to identify items with overlapping availability, where
+one or the other can not be closed without changing the dates on the reservation, or assigning
+the reservation to a new rental item, with availability for that time period. This SQL will
+point out the conflicts, the type of conflict, as well as an applicable reservation with
+availability for the reservation with the issues. By default the SQL will return all items
+with availability issues.
+
+INSTRUCTIONS:
+
+To use, you can either copy and past the SQL and look for your item in the returned records,
+or change the text that says CHANGE ME in the SQL below. */
+WITH searchdata
+AS (
+	SELECT ('CHANGE ME') AS reservationnumber, -- Use this line to search for one reservation
+		ARRAY ['CHANGE ME', 'CHANGE ME', '...'] AS reservationnumbers -- Use this line to search for multiple reservations
+	),
+	/*
+
+INFO FOR FIRST CTE:
+
+This first CTE will select all reservation items for a reservation 
 
 It uses a row_number function to order the items based on their end dates.
 The purpose of this is so we have something to reference when comparing the end of one
@@ -11,7 +33,7 @@ The same case when is used for finding the items start and end dates, because it
 are stopped with no end date have an end date = to 1000-01-01, so the case when populates
 the date it was started as the stop date.
 */
-WITH reservationdates
+reservationdates
 AS (
 	SELECT resi.reservationitemid, -- reservationitemid of current reservation item
 		resi.rentalitemid AS itemid, -- rentalitemid assigned to the reservation
@@ -58,11 +80,11 @@ AS (
 				THEN 'Canceled'
 			ELSE 'AHHH'
 			END AS STATUS,
-			r.reservationnumber
+		r.reservationnumber
 	--
 	FROM rerentalitem ri
 	INNER JOIN rereservationitem resi ON resi.rentalitemid = ri.rentalitemid
-	INNER JOIN rereservation r on r.reservationid = resi.reservationid
+	INNER JOIN rereservation r ON r.reservationid = resi.reservationid
 	WHERE STATE NOT IN (5)
 	),
 problemrentals
@@ -263,7 +285,7 @@ AS (
 resitems
 AS (
 	SELECT 'Rental Item: ' || pr.curritemnumber AS rental_item,
-	    pr.textfields [4] AS conflict_description,
+		pr.textfields [4] AS conflict_description,
 		--
 		'Availability for reservation #' || changeres.reservationnumber || ' exists on rental item: ' || ar.newitemnumber AS availability,
 		CASE 
@@ -271,7 +293,7 @@ AS (
 				THEN 'Yes'
 			ELSE 'No'
 			END AS new_item_matches_type,
-	    'Availability: ' || ar.availstart || ' --> ' AS new_item_availability_start,
+		'Availability: ' || ar.availstart || ' --> ' AS new_item_availability_start,
 		--
 		('[ ' || pr.textfields [1] || ' ===> ' || pr.textfields [2] || ' ]') AS bad_reservation_dates,
 		--
@@ -295,7 +317,28 @@ AS (
 	LEFT JOIN rereservation changeres ON pr.intfields [2] = changeres.reservationid
 	LEFT JOIN availablerentals ar ON pr.textfields [1] >= ar.availstart
 		AND ar.availend >= pr.textfields [2]
-		AND ar.storeid = pr.storeid
+	LEFT JOIN searchdata s ON 1 = 1
+	--
+	WHERE (
+			CASE 
+				WHEN s.reservationnumber != 'CHANGE ME'
+					AND s.reservationnumber = rdsr.reservationnumber::VARCHAR
+				THEN 1
+				WHEN s.reservationnumber != 'CHANGE ME'
+					AND s.reservationnumber = rder.reservationnumber::VARCHAR
+				THEN 1
+				WHEN s.reservationnumbers != ARRAY ['CHANGE ME', 'CHANGE ME', '...']
+					AND rdsr.reservationnumber::VARCHAR = ANY(s.reservationnumbers)
+				THEN 1
+				WHEN s.reservationnumbers != ARRAY ['CHANGE ME', 'CHANGE ME', '...']
+					AND rder.reservationnumber::VARCHAR = ANY(s.reservationnumbers)
+				THEN 1
+				WHEN s.reservationnumber = 'CHANGE ME'
+				AND s.reservationnumbers = ARRAY ['CHANGE ME', 'CHANGE ME', '...']
+				THEN 1
+				ELSE 0
+				END
+			) = 1
 	ORDER BY pr.curritemnumber ASC
 	)
 SELECT *
