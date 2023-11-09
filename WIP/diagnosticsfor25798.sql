@@ -15,19 +15,18 @@ SELECT v.name,
 						END) OVER (PARTITION BY sl.acctid)
 				) * .0001, 2)
 		)::VARCHAR AS net_vendor_adjustment,
-	/* Net Adjustment Amount */ (
-		0 - (
+	/* Net Adjustment Amount */
+	Round(0 - (
 			ROUND((sl.remainingamt * .0001), 2) - CASE 
 				WHEN voids.id IS NOT NULL
 					THEN 0
-				WHEN ((docamt - sum(amtpaidthischeck)) * .0001) <= 0
+				WHEN (docamt - sum(amtpaidthischeck)) <= 0
 					THEN 0
-				WHEN ((docamt - sum(amtpaidthischeck))) != docamt
-					THEN ROUND(((docamt - sum(amtpaidthischeck)) * .0001), 2)
+				WHEN (docamt - sum(amtpaidthischeck)) != docamt
+					THEN ROUND(docamt - sum(amtpaidthischeck), 2)
 				ELSE 0
-				END
-			)
-		) AS net_invoice_adjustment,
+				END * .0001
+			), 2) AS net_invoice_adjustment,
 	/* Remaining Amount*/ ROUND((sl.remainingamt * .0001), 2) AS current_remaining_amt,
 	--
 	/* Invoice Amount */ ROUND((sl.docamt * .0001), 2) AS invoice_amount,
@@ -177,20 +176,11 @@ LEFT JOIN (
 	) badids ON badids.journalentryid = sl.docrefglid
 	AND badids.accountingid = v.accountingid
 WHERE sltrxstate NOT IN (1, 9)
---	AND v.vendornumber IN ()
+	--	AND v.vendornumber IN ()
 	AND remainingamt <> docamt
 	AND sl.accttype = 2
 	AND cl.apinvoiceid IS NULL -- replaces the nested select using left join
 	AND sl.description NOT ilike '%CHECK%'
 	AND sl.description NOT ilike '%Void%'
-ORDER BY v.name ASC, badids.bad_ids ASC
-
--- Output 3
--- Corrects erroneous packing slip invoice, storeid = 0
--- need make diag for bad accountingid or storeid
-SELECT gls.sltrxid,
-	gls.storeid,
-	s.storeidluid AS good_id
-FROM glsltransaction gls
-INNER JOIN costore s USING (storeid)
-WHERE s.storeid;
+ORDER BY v.name ASC,
+	badids.bad_ids ASC;
