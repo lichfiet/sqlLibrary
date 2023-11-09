@@ -90,6 +90,8 @@ SELECT h.glhistoryid,
 			THEN left(h.description, 25) || '....'
 		ELSE h.description
 		END AS description,
+	h.journalentryid,
+	h.date,
 	h.amtdebit,
 	h.amtcredit,
 	coa.acctdept,
