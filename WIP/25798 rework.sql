@@ -16,13 +16,21 @@
 -- 
 -- It includes multiple diagnostics in this order:
 --
---      Output 1: Incorrect Storeid / Accountingid or luids
+--      Output 1: 
+--	Incorrect Storeid / Accountingid or luids
 --
---      Output 2: Checks paid, partially paid, and not paid when they should be.
---          This includes checks paid 
+--      Output 2:
+--	Checks paid, partially paid, and not paid when they should be.
+--      This includes checks where all invoices were voided
+--	
+--	Output 3: 
+--	Checks marked as paid with no invoice history due 
+--	to glhistory entries with no or bad storeid fields
+--       
 --
 --
---                                                                                    
+--
+--
 -- mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm
 --
 --
@@ -43,12 +51,19 @@
 --  Corrects erroneous packing slip invoice, storeid = 0
 --
 --
-SELECT gls.sltrxid,
-	gls.storeid,
-	s.storeidluid AS good_id
-FROM glsltransaction gls
-INNER JOIN costore s USING (storeid)
-WHERE s.storeid = 1;
+UPDATE glsltransaction gls
+SET storeid = ${Storeid invoices originated in},
+	storeidluid = data.good_id
+FROM (
+	SELECT gls.sltrxid,
+		gls.storeid,
+		s.storeidluid AS good_id
+	FROM glsltransaction gls
+	INNER JOIN costore s USING (storeid)
+	WHERE s.storeid = ${Storeid invoices originated in}
+	) data
+WHERE gls.storeid = 0
+	AND accttype = 2;
 --
 -- mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm
 --
