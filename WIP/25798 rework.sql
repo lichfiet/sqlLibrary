@@ -65,87 +65,113 @@ WHERE s.storeid = 1;
 --                             888                                    
 --                             888                                    
 --
-SELECT /* Remaining Amount*/ ROUND((sl.remainingamt * .0001), 2) AS remaining,
+UPDATE glsltransaction sl
+SET sl.sltrxstate = bob.newstate,
+	sl.remainingamt = bob.corr_remain
+FROM (
+	SELECT v.name,
+		/* Invoice Number */ sl.documentnumber AS invoicenumber,
+		'$' || (
+			0 - ROUND((
+					SUM(sl.remainingamt) OVER (PARTITION BY sl.acctid) - SUM(CASE 
+							WHEN voids.id IS NOT NULL
+								THEN 0
+							WHEN (docamt - sum(amtpaidthischeck)) <= 0
+								THEN 0
+							WHEN (docamt - sum(amtpaidthischeck)) != docamt
+								THEN (docamt - sum(amtpaidthischeck))
+							ELSE 0
+							END) OVER (PARTITION BY sl.acctid)
+					) * .0001, 2)
+			)::VARCHAR AS net_vendor_adjustment,
+		/* Net Adjustment Amount */ (
+			0 - (
+				ROUND((sl.remainingamt * .0001), 2) - CASE 
+					WHEN voids.id IS NOT NULL
+						THEN 0
+					WHEN ((docamt - sum(amtpaidthischeck)) * .0001) <= 0
+						THEN 0
+					WHEN ((docamt - sum(amtpaidthischeck))) != docamt
+						THEN ROUND(((docamt - sum(amtpaidthischeck)) * .0001), 2)
+					ELSE 0
+					END
+				)
+			) AS net_invoice_adjustment,
+		/* Correct Remaing Amount */
+		CASE 
+			WHEN voids.id IS NOT NULL
+				THEN 0
+			WHEN (docamt - sum(amtpaidthischeck)) <= 0
+				THEN 0
+			WHEN (docamt - sum(amtpaidthischeck)) != docamt
+				THEN (docamt - sum(amtpaidthischeck))
+			ELSE 0
+			END AS corr_remain,
+		/* */
+		/* Invoice Description */ sl.description,
+		/* SLTRX State */
+		CASE 
+			WHEN voids.id IS NOT NULL -- if part of the voided checks list
+				THEN 1
+			WHEN ((docamt - sum(amtpaidthischeck)) * .0001) <= 0 -- If the sum of payments <= 0
+				THEN 4 --FULLY PAID
+			WHEN ((docamt - sum(amtpaidthischeck)) * .0001) != docamt -- If the sum of payments = part of the invoice amt
+				THEN 2 -- PARTIALLY PAID
+			WHEN ((docamt - sum(amtpaidthischeck)) * .0001) = docamt --- IF the sum of check payments = 0
+				THEN 1 -- UNPAID
+			ELSE 0 -- Panic if you get a zero
+			END AS newstate,
+		/* */
+		/* Current State */ sl.sltrxstate AS oldstate,
+		--
+		CASE 
+			WHEN voids.id IS NOT NULL
+				THEN voids.id
+			ELSE sl.sltrxid
+			END AS identifier
 	--
-	/* Invoice Amount */ ROUND((sl.docamt * .0001), 2) AS docamt,
-	--
-	/* Paid from Checks */ ROUND(sum(amtpaidthischeck * .0001), 2) AS paidsofar,
-	--
-	/* Correct Remaing Amount */
-	CASE 
-		WHEN voids.id IS NOT NULL
-			THEN 0
-		WHEN ((docamt - sum(amtpaidthischeck)) * .0001) <= 0
-			THEN 0
-		WHEN ((docamt - sum(amtpaidthischeck))) != docamt
-			THEN ROUND(((docamt - sum(amtpaidthischeck)) * .0001), 2)
-		ELSE 0
-		END AS corr_remain,
-	/* */
-	/* Invoice Number */ sl.documentnumber,
-	/* Invoice Description */ sl.description,
-	--
-	/* SLTRX State */
-	CASE 
-		WHEN voids.id IS NOT NULL -- if part of the voided checks list
-			THEN 1
-		WHEN ((docamt - sum(amtpaidthischeck)) * .0001) <= 0 -- If the sum of payments <= 0
-			THEN 4 --FULLY PAID
-		WHEN ((docamt - sum(amtpaidthischeck)) * .0001) != docamt -- If the sum of payments = part of the invoice amt
-			THEN 2 -- PARTIALLY PAID
-		WHEN ((docamt - sum(amtpaidthischeck)) * .0001) = docamt --- IF the sum of check payments = 0
-			THEN 1 -- UNPAID
-		ELSE 0 -- Panic if you get a zero
-		END AS STATE,
-	/* */
-	sl.sltrxstate AS oldstate,
-	--
-	sl.sltrxid AS identifier,
-	CASE 
-		WHEN voids.id IS NOT NULL
-			THEN voids.id
-		ELSE sl.sltrxid
-		END AS sltrxidentifier
---
-FROM apcheckinvoicelist il
-LEFT JOIN glsltransaction sl ON il.apinvoiceid = sl.sltrxid
-LEFT JOIN (
-	SELECT il.apinvoiceid AS id, -- ap invoice id or sltrxid
-		sl.documentnumber
-	FROM apcheckinvoicelist il -- list of invoices that have had checks paid on them
-	INNER JOIN apcheckheader ch ON ch.apcheckheaderid = il.apcheckheaderid -- join on checkheader to see the check states
-	INNER JOIN glsltransaction sl ON sl.sltrxid = il.apinvoiceid -- join to reference the glsl info (remaining amounts and whatnot)
-	WHERE sl.docamt != sl.remainingamt -- Where remaining amount != the invoice amount
-		AND sltrxstate NOT IN (9, 4) -- Not voided or already paid
-		AND sl.accttype = 2 -- Is an ap invoice
-	GROUP BY il.apinvoiceid,
-		sl.documentnumber
-	/* Whether all checks are voided */
-	HAVING sum(CASE 
-				WHEN ch.voidedflag = 2
-					THEN 1
-				ELSE 0
-				END) = count(il.apinvoiceid)::INT
-	) voids ON voids.id = sl.sltrxid
-INNER JOIN apvendor v ON v.vendorid = sl.acctid
-LEFT JOIN apcheckheader ch ON ch.apcheckheaderid = il.apcheckheaderid
-WHERE (
-		(
-			sltrxstate NOT IN (9)
-			AND ch.voidedflag = 0
+	FROM apcheckinvoicelist il
+	LEFT JOIN glsltransaction sl ON il.apinvoiceid = sl.sltrxid
+	LEFT JOIN (
+		SELECT il.apinvoiceid AS id, -- ap invoice id or sltrxid
+			sl.documentnumber
+		FROM apcheckinvoicelist il -- list of invoices that have had checks paid on them
+		INNER JOIN apcheckheader ch ON ch.apcheckheaderid = il.apcheckheaderid -- join on checkheader to see the check states
+		INNER JOIN glsltransaction sl ON sl.sltrxid = il.apinvoiceid -- join to reference the glsl info (remaining amounts and whatnot)
+		WHERE sl.docamt != sl.remainingamt -- Where remaining amount != the invoice amount
+			AND sltrxstate NOT IN (9, 4) -- Not voided or already paid
+			AND sl.accttype = 2 -- Is an ap invoice
+		GROUP BY il.apinvoiceid,
+			sl.documentnumber
+		/* Whether all checks are voided */
+		HAVING sum(CASE 
+					WHEN ch.voidedflag = 2
+						THEN 1
+					ELSE 0
+					END) = count(il.apinvoiceid)::INT
+		) voids ON voids.id = sl.sltrxid
+	INNER JOIN apvendor v ON v.vendorid = sl.acctid
+	LEFT JOIN apcheckheader ch ON ch.apcheckheaderid = il.apcheckheaderid
+	WHERE (
+			(
+				sltrxstate NOT IN (9)
+				AND ch.voidedflag = 0
+				)
+			OR voids.id IS NOT NULL
 			)
+	--	AND v.vendornumber = 410928 -- Makes sure we don't included voided checks in the paid so far sum
+	GROUP BY apinvoiceid,
+		sl.documentnumber,
+		sl.description,
+		sl.docamt,
+		sl.remainingamt,
+		sl.sltrxid,
+		voids.id,
+		v.name
+	HAVING sum(amtpaidthischeck) != (docamt - remainingamt)
 		OR voids.id IS NOT NULL
-		)
-	AND v.vendornumber = 410928 -- Makes sure we don't included voided checks in the paid so far sum
-GROUP BY apinvoiceid,
-	sl.documentnumber,
-	sl.description,
-	sl.docamt,
-	sl.remainingamt,
-	sl.sltrxid,
-	voids.id
-HAVING sum(amtpaidthischeck) != (docamt - remainingamt)
-	OR voids.id IS NOT NULL;
+	) bob
+WHERE sl.sltrxid = bob.identifier;
 --
 -- mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm
 --
@@ -211,7 +237,49 @@ WHERE aptopayinvid IN (
 			OR sl.sltrxstate IN (9, 4)
 			OR v.vendorid IS NULL
 		)
+--
+-- Output 5
+UPDATE glsltransaction gls
+SET sltrxstate = 1,
+	remainingamt = gls.docamt
+FROM (
+	SELECT sltrxid
+	FROM glsltransaction gls
+	INNER JOIN apvendor v ON v.vendorid = gls.acctid
+	LEFT JOIN apcheckinvoicelist cl ON cl.apinvoiceid = gls.sltrxid
+	WHERE sltrxstate NOT IN (1, 9)
+--		AND v.vendornumber = 53592
+		AND remainingamt <> docamt
+		AND gls.accttype = 2
+		AND cl.apinvoiceid IS NULL -- replaces the nested select using left join
+		AND gls.description NOT ilike '%CHECK%'
+		AND gls.description NOT ilike '%Void%'
+	) data
+WHERE gls.sltrxid = data.sltrxid;
 
+UPDATE glhistory h
+SET accountingid = bob.acctgid,
+	accountingidluid = bob.acctgidluid,
+	locationid = bob.childstoreid,
+	locationidluid = bob.childstoreidluid
+FROM (
+	SELECT s.storeid AS acctgid,
+		storeidluid AS acctgidluid,
+		sm.childstoreid,
+		sm.childstoreidluid,
+		h.glhistoryid
+	FROM glhistory h
+	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = h.acctdeptid
+	INNER JOIN costore s ON coa.accountingid = s.storeid
+	INNER JOIN costoremap sm ON sm.parentstoreid = coa.accountingid
+	WHERE (
+			h.accountingidluid != coa.accountingidluid
+			OR h.accountingid != coa.accountingid
+			OR h.locationidluid != sm.childstoreidluid
+			OR h.locationid != sm.childstoreid
+			)
+	) bob
+WHERE bob.glhistoryid = h.glhistoryid;
 
 
 -- EVO-25798 Update Remaining Amount Based on Check History
