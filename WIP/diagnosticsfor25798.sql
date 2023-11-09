@@ -184,3 +184,13 @@ WHERE sltrxstate NOT IN (1, 9)
 	AND sl.description NOT ilike '%CHECK%'
 	AND sl.description NOT ilike '%Void%'
 ORDER BY v.name ASC, badids.bad_ids ASC
+
+-- Output 3
+-- Corrects erroneous packing slip invoice, storeid = 0
+-- need make diag for bad accountingid or storeid
+SELECT gls.sltrxid,
+	gls.storeid,
+	s.storeidluid AS good_id
+FROM glsltransaction gls
+INNER JOIN costore s USING (storeid)
+WHERE s.storeid;
