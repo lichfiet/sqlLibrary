@@ -337,23 +337,26 @@ WHERE aptopayinvid IN (
 
 --OP2
 -- Resets state+remainingamt back for invoices paid w/o check V.2
-UPDATE glsltransaction gls
+UPDATE glsltransaction sl
 SET sltrxstate = 1,
-	remainingamt = gls.docamt
+	remainingamt = sl.docamt
 FROM (
-	SELECT sltrxid
-	FROM glsltransaction gls
-	INNER JOIN apvendor v ON v.vendorid = gls.acctid
-	LEFT JOIN apcheckinvoicelist cl ON cl.apinvoiceid = gls.sltrxid
+	SELECT '$' || ROUND(sum(docamt * .0001) OVER (PARTITION BY sl.acctid), 0)::VARCHAR AS totalinvoices,
+	    v.name as vendorname,
+		sl.*
+	FROM glsltransaction sl
+	INNER JOIN apvendor v ON v.vendorid = sl.acctid
+	LEFT JOIN apcheckinvoicelist cl ON cl.apinvoiceid = sl.sltrxid
 	WHERE sltrxstate NOT IN (1, 9)
-		AND v.vendornumber = 896315
+		AND v.vendornumber IN (27968, 28122)
 		AND remainingamt <> docamt
-		AND gls.accttype = 2
+		AND sl.accttype = 2
 		AND cl.apinvoiceid IS NULL -- replaces the nested select using left join
-		AND gls.description NOT ilike '%CHECK%'
-		AND gls.description NOT ilike '%Void%'
+		AND sl.description NOT ilike '%CHECK%'
+		AND sl.description NOT ilike '%Void%'
 	) data
-WHERE gls.sltrxid = data.sltrxid;
+WHERE sl.sltrxid = data.sltrxid;
+
 
 
 
