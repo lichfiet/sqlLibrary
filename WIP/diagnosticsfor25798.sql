@@ -222,12 +222,13 @@ WHERE sltrxstate NOT IN (1, 9)
 ORDER BY v.name ASC,
 	badids.bad_ids ASC;
 
+-- oyutput 3 ids
 SELECT v.name AS vendor_name,
 	sl.documentnumber AS invoicenumber,
 	TO_CHAR(sl.DATE, 'YYYY-MM-DD') as invoice_date,
 	'$' || ROUND((sl.docamt * .0001), 2)::VARCHAR AS invoice_amount,
 	/* glhistory vs chart of accounts*/
-	CASE 
+    'COA is correct' || CASE 
 		WHEN h.accountingid != coa.accountingid
 			THEN 'accountingid, '
 		ELSE ''
@@ -241,9 +242,9 @@ SELECT v.name AS vendor_name,
 		ELSE ''
 		END || CASE 
 		WHEN h.locationidluid != sm.childstoreidluid
-			THEN 'storeidluid, '
+			THEN 'storeidluid  '
 		ELSE ''
-		END AS glhistoryvschartofaccounts,
+		END AS chartofaccountsvsglhistory,
 	/* */
 	CASE 
 		WHEN sl.accountingid != v.accountingid
@@ -279,9 +280,11 @@ SELECT v.name AS vendor_name,
 			THEN 'storeidluid, '
 		ELSE ''
 		END AS glslvsglhistory,
-	sl.sltrxid,
-	h.glhistoryid,
-	sl.storeid,
+	sl.sltrxid AS glsl_id,
+	h.glhistoryid AS history_id,
+	v.vendorid AS vendor_id,
+	coa.acctdeptid AS account_id,
+	'GLSL IDs [' || 'acctg: ' || sl.accountingid::varchar || ', ' || sl.accountingidluid::varchar || ' storeids: ' || sl.storeid::varchar || ', ' || sl.storeidluid::varchar || ']',
 	h.locationid
 FROM glhistory h
 INNER JOIN glchartofaccounts coa ON coa.acctdeptid = h.acctdeptid
