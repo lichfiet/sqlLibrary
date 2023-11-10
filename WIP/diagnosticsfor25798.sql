@@ -1,5 +1,27 @@
--- Output 1
--- Diagnostic // Change vendor number on line 40 to vendor with issue
+/* Accounts Payable Health Check */
+--
+-- Info: This SQL will diagnose some common issues relating to CRs and other
+-- related issues caused by bugs. It also includes some info about things like
+-- the ap reconciliation.
+--
+-- To use: By default will select for all vendors, will make a single vendor one
+-- at some point.
+-- 
+-- Outputs:
+--
+--  1) Invoices Paid/Partially Paid/Not Paid
+--  2) Invoices Paid with no check history
+--  3) 
+-- 
+/* Invoices Paid/Partially Paid/Not Paid when they shouldn't be */
+--
+-- This SQL diagnoses some of the issues noted in EVO-25798
+-- that have to do with the remaining amounts being incorrect on
+-- vendor invoices. It compares the amounts paid on 
+-- checks, with the current remaining amount, and
+-- will show you the increase or decrease in ap balance based on what
+-- the invoice's remaining amount should be.
+--
 SELECT v.name,
 	/* Invoice Number */ sl.documentnumber AS invoicenumber,
 	'$' || (
@@ -111,7 +133,7 @@ WHERE (
 			)
 		OR voids.id IS NOT NULL
 		)
---	AND v.vendornumber = 410928 -- Makes sure we don't included voided checks in the paid so far sum
+--	AND v.vendornumber IN (xxxxxx) -- Makes sure we don't included voided checks in the paid so far sum
 GROUP BY apinvoiceid,
 	sl.documentnumber,
 	sl.description,
@@ -158,11 +180,26 @@ LEFT JOIN (
 	FROM glhistory h
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = h.acctdeptid
 	INNER JOIN costoremap sm ON sm.parentstoreid = coa.accountingid
+	LEFT JOIN glsltransaction sl ON sl.sltrxid = h.schedxrefid
+	LEFT JOIN apvendor v ON v.vendorid = sl.acctid
+	LEFT JOIN costoremap smv on smv.parentstoreid = v.accountingid
 	WHERE (
 			h.accountingidluid != coa.accountingidluid
 			OR h.accountingid != coa.accountingid
 			OR h.locationidluid != sm.childstoreidluid
 			OR h.locationid != sm.childstoreid
+			OR (
+				sl.sltrxid IS NOT NULL
+				AND sl.accountingid = smv.parentstoreid
+				AND (
+					sl.storeid != h.locationid
+					OR sl.storeidluid != h.locationidluid
+					OR sl.accountingid != h.accountingid
+					OR sl.accountingid != sl.accountingidluid
+					)
+				)
+			OR sl.accountingid != v.accountingid
+			OR sl.storeid != smv.childstoreid
 			)
 	GROUP BY h.journalentryid,
 		h.accountingidluid,
@@ -176,7 +213,7 @@ LEFT JOIN (
 	) badids ON badids.journalentryid = sl.docrefglid
 	AND badids.accountingid = v.accountingid
 WHERE sltrxstate NOT IN (1, 9)
-	--	AND v.vendornumber IN ()
+	--	AND v.vendornumber IN (xxxxxx)
 	AND remainingamt <> docamt
 	AND sl.accttype = 2
 	AND cl.apinvoiceid IS NULL -- replaces the nested select using left join
@@ -184,3 +221,89 @@ WHERE sltrxstate NOT IN (1, 9)
 	AND sl.description NOT ilike '%Void%'
 ORDER BY v.name ASC,
 	badids.bad_ids ASC;
+
+SELECT v.name AS vendor_name,
+	sl.documentnumber AS invoicenumber,
+	TO_CHAR(sl.DATE, 'YYYY-MM-DD') as invoice_date,
+	'$' || ROUND((sl.docamt * .0001), 2)::VARCHAR AS invoice_amount,
+	/* glhistory vs chart of accounts*/
+	CASE 
+		WHEN h.accountingid != coa.accountingid
+			THEN 'accountingid, '
+		ELSE ''
+		END || CASE 
+		WHEN h.accountingidluid != coa.accountingidluid
+			THEN 'accountingidluid, '
+		ELSE ''
+		END || CASE 
+		WHEN h.locationid != sm.childstoreid
+			THEN 'storeid, '
+		ELSE ''
+		END || CASE 
+		WHEN h.locationidluid != sm.childstoreidluid
+			THEN 'storeidluid, '
+		ELSE ''
+		END AS glhistoryvschartofaccounts,
+	/* */
+	CASE 
+		WHEN sl.accountingid != v.accountingid
+			THEN 'accountingid, '
+		ELSE ''
+		END || CASE 
+		WHEN sl.accountingidluid != v.accountingidluid
+			THEN 'accountingidluid, '
+		ELSE ''
+		END || CASE 
+		WHEN sl.storeid != smv.childstoreid
+			THEN 'storeid, '
+		ELSE ''
+		END || CASE 
+		WHEN sl.storeidluid != smv.childstoreidluid
+			THEN 'storeidluid, '
+		ELSE ''
+		END AS glslvsvendor,
+	CASE 
+		WHEN sl.accountingid != h.accountingid
+			THEN 'accountingid, '
+		ELSE ''
+		END || CASE 
+		WHEN sl.accountingidluid != h.accountingidluid
+			THEN 'accountingidluid, '
+		ELSE ''
+		END || CASE 
+		WHEN sl.storeid != h.locationid
+			THEN 'storeid, '
+		ELSE ''
+		END || CASE 
+		WHEN sl.storeidluid != h.locationidluid
+			THEN 'storeidluid, '
+		ELSE ''
+		END AS glslvsglhistory,
+	sl.sltrxid,
+	h.glhistoryid,
+	sl.storeid,
+	h.locationid
+FROM glhistory h
+INNER JOIN glchartofaccounts coa ON coa.acctdeptid = h.acctdeptid
+INNER JOIN costoremap sm ON sm.parentstoreid = coa.accountingid
+INNER JOIN glsltransaction sl ON sl.sltrxid = h.schedxrefid
+INNER JOIN apvendor v ON v.vendorid = sl.acctid
+INNER JOIN costoremap smv ON smv.parentstoreid = v.accountingid
+WHERE (
+		h.accountingidluid != coa.accountingidluid
+		OR h.accountingid != coa.accountingid
+		OR h.locationidluid != sm.childstoreidluid
+		OR h.locationid != sm.childstoreid
+		)
+	OR (
+		sl.storeid != smv.childstoreid
+		OR sl.storeidluid != smv.childstoreidluid
+		OR sl.accountingid != v.accountingid
+		OR sl.accountingidluid != v.accountingidluid
+		)
+	OR (
+		sl.accountingid != h.accountingid
+		OR sl.accountingidluid != h.accountingidluid
+		OR sl.storeid != h.locationid
+		OR sl.storeidluid != h.locationidluid
+		)
