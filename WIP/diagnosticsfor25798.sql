@@ -11,7 +11,8 @@
 --
 --  1) Invoices Paid/Partially Paid/Not Paid
 --  2) Invoices Paid with no check history
---  3) 
+--  3) Store and Accounting Comparison vs glsl, coa, and glhist
+--  4) aptopayinv items linking to bad glsl data
 -- 
 /* Invoices Paid/Partially Paid/Not Paid when they shouldn't be */
 --
@@ -309,4 +310,16 @@ WHERE (
 		OR sl.accountingidluid != h.accountingidluid
 		OR sl.storeid != h.locationid
 		OR sl.storeidluid != h.locationidluid
-		)
+		);
+
+-- output 4
+
+SELECT v.name,
+	sl.documentnumber AS invoicenumber,
+	sl.*
+FROM aptopayinv tpi
+LEFT JOIN glsltransaction sl ON sl.sltrxid = tpi.apinvoiceid
+LEFT JOIN apvendor v ON v.vendorid = tpi.vendorid
+WHERE sl.sltrxid IS NULL
+	OR sl.sltrxstate NOT IN (1, 2);
+
