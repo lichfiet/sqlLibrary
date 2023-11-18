@@ -1,6 +1,7 @@
 WITH maedata
 AS (
-	SELECT businessactionid,
+	SELECT ba.businessactionid,
+		documentnumber,
 		CASE documenttype
 			WHEN 1001
 				THEN 'Parts Invoice'
@@ -77,26 +78,22 @@ AS (
 				THEN 'Pending'
 			ELSE 'Unknown'
 			END AS errorstatus,
-		LEFT((date_trunc('minute', documentdate))::VARCHAR, 16) AS docdate
-	FROM mabusinessaction ba
-	WHERE ba.STATUS = 2
-	),
-oob
-AS (
-	SELECT documentnumber,
-		sum(debitamt * .0001) AS debits,
-		sum(creditamt * .0001) AS credits,
-		(sum(debitamt * .0001) - sum(creditamt * .0001)) AS oobamt,
+		to_char(documentdate, 'YYYY / MM / DD') AS docdate,
+		sum(bai.debitamt - creditamt * .0001) AS oobamt,
 		CASE 
-			WHEN (sum(debitamt * .0001) - sum(creditamt * .0001)) = 0
+			WHEN sum(debitamt - creditamt * .0001) = 0
 				THEN 'In Balance'
 			ELSE 'Out of Balance!'
 			END AS oob,
-		ba.businessactionid
-	FROM mabusinessactionitem bai
-	INNER JOIN mabusinessaction ba ON ba.businessactionid = bai.businessactionid
+		left(string_agg(errortext, ''), 37) || '...' AS txt
+	FROM mabusinessaction ba
+	LEFT JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid
+	LEFT JOIN mabusinessactionerror bae ON bae.businessactionid = ba.businessactionid
 	WHERE ba.STATUS = 2
-	GROUP BY ba.businessactionid
+	GROUP BY ba.businessactionid,
+		documentnumber,
+		STATUS,
+		documenttype
 	),
 missingmae
 AS (
@@ -105,19 +102,6 @@ AS (
 	WHERE storeid = 0
 		AND documentid = 0
 		AND STATUS = 2
-	),
-errortxt
-AS (
-	SELECT row_number() OVER (
-			PARTITION BY businessactionid ORDER BY businessactionerrorid ASC
-			) AS num,
-		CASE 
-			WHEN length(errortext) < 40
-				THEN errortext
-			ELSE left(errortext, 37) || '...'
-			END AS txt,
-		*
-	FROM mabusinessactionerror
 	),
 schedacctnotvalidar
 AS (
@@ -554,12 +538,31 @@ AS (
 	INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
 	INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
 	INNER JOIN mabusinessaction ba ON ba.invoicenumber = pi.partinvoicenumber::TEXT
-	INNER JOIN mabusinessactionitem bati ON bati.businessactionid = ba.businessactionid
-	INNER JOIN oob ON oob.businessactionid = ba.businessactionid -- Join on the OOB cte so we can validate fixing this fixes the oob amount
+	INNER JOIN maedata ON maedata.businessactionid = ba.businessactionid -- Join on the OOB cte so we can validate fixing this fixes the oob amount
 	WHERE ba.documenttype = 1001
 		AND ba.STATUS = 2
-		AND (piti.taxamount - pite.taxamount) = oob.oobamt
+		AND (piti.taxamount - pite.taxamount) = maedata.oobamt
 	GROUP BY ba.businessactionid
+	),
+oobmissingmoppartinvoice
+AS (
+	SELECT count(pi.partinvoiceid) OVER (PARTITION BY pi.partinvoiceid) AS paymentcount,
+		ba.businessactionid
+	FROM papartinvoice pi
+	INNER JOIN mabusinessaction ba ON ba.documentid = pi.partinvoiceid
+	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
+	INNER JOIN cocommoninvoice ci ON ci.commoninvoiceid = pi.commoninvoiceid
+	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
+	INNER JOIN (
+		SELECT sum(debitamt) - sum(creditamt) AS oobamt,
+			businessactionid
+		FROM mabusinessactionitem
+		GROUP BY businessactionid
+		) sums ON sums.businessactionid = ba.businessactionid
+	WHERE ba.STATUS = 2
+		AND pi.invoicetype NOT IN (2, 3)
+		AND ABS(sums.oobamt) = pit.invoicesubtotal
+		AND cip.amount = 0
 	),
 oobwrongmopamountrepairorder
 AS (
@@ -606,157 +609,132 @@ AS (
 		) error
 	GROUP BY businessactionid
 	)
-SELECT ba.documentnumber,
+SELECT maedata.documentnumber AS docnumber,
 	maedata.doctype AS documenttype,
 	maedata.errorstatus AS STATUS,
 	maedata.docdate AS DATE,
-	errortxt.txt AS errormessage,
+	maedata.txt AS errormessage,
 	s.storename,
 	ba.documentid,
-	'-->' AS errorchecks,
-	CASE 
-		WHEN oob.oob IS NOT NULL
-			THEN oob.oob
-		ELSE 'N/A'
-		END AS balancestate,
 	CASE 
 		WHEN missingmae.businessactionid IS NOT NULL
-			THEN 'EVO-20030'
-		ELSE 'N/A'
-		END AS missingmaefromfrontend,
-	CASE 
+			THEN 'EVO-20030 Document Missing from MAE List | T1 Preapproved'
+		ELSE ''
+		END || CASE 
 		WHEN schedacctnotvalidar.businessactionid IS NOT NULL
-			THEN 'EVO-38097'
-		ELSE 'N/A'
-		END AS schedacctnotvalidar,
-	CASE 
+			THEN 'EVO-38097 Scheduled Not Valid for A/R Customerid XXXXX PSS Items | T1 Preapproved'
+		ELSE ''
+		END || CASE 
 		WHEN miscinvnonarmop.businessactionid IS NOT NULL
-			THEN 'EVO-33866'
-		ELSE 'N/A'
-		END AS miscinvnonarmop,
-	'|' AS erroraccesing,
-	CASE 
+			THEN 'EVO-33866 Scheduled Not Valid for A/R Customerid XXXXX Misc Receipt | T1 Preapproved'
+		ELSE ''
+		END || CASE 
 		WHEN earop.businessactionid IS NOT NULL
-			THEN 'EVO-26911'
-		ELSE 'N/A'
-		END AS erroraccropartcat,
-	CASE 
+			THEN 'EVO-26911 Error Accessing RO Part Category'
+		ELSE ''
+		END || CASE 
 		WHEN earol.businessactionid IS NOT NULL
-			THEN 'EVO-18036'
-		ELSE 'N/A'
-		END AS erroraccrolaborcat,
-	CASE 
+			THEN 'EVO-18036 Error Accessing RO Labor Category'
+		ELSE ''
+		END || CASE 
 		WHEN erroraccmiscsaletype.businessactionid IS NOT NULL
-			THEN 'EVO-39691'
-		ELSE 'N/A'
-		END AS erroraccmiscsaletype,
-	CASE 
+			THEN 'EVO-39691 Error Accessing RO Misc Charge Saletype'
+		ELSE ''
+		END || CASE 
 		WHEN eapicat.businessactionid IS NOT NULL -- Error Accessing on Part Invoice // Verified Diag To Work
-			THEN 'EVO-13570'
-		ELSE 'N/A'
-		END AS erroraccpilpartcat,
-	CASE 
+			THEN 'EVO-13570 Error Accessing Part Invoice Category'
+		ELSE ''
+		END || CASE 
 		WHEN earpcat.businessactionid IS NOT NULL -- Error Accessing On Part Receiving Document
-			THEN 'EVO-31748'
-		ELSE 'N/A'
-		END AS erroraccrecvpart,
-	'|' AS erroraccessing,
-	CASE 
+			THEN 'EVO-31748 Error Accessing Receiving Document Part Category'
+		ELSE ''
+		END || CASE 
 		WHEN partinvoicescheduledmu.businessactionid IS NOT NULL -- Error Accessing On Part Receiving Document
-			THEN 'EVO-14901'
-		ELSE 'N/A'
-		END AS partinvoicescheduledmu,
-	CASE 
+			THEN 'EVO-14901 Part Category Has MU Scheduled Inventory Account'
+		ELSE ''
+		END || CASE 
 		WHEN analysispending.businessactionid IS NOT NULL -- Analysis Pending On Part Receiving Document
-			THEN 'EVO-29301'
-		ELSE 'N/A'
-		END AS analysispending,
-	CASE 
+			THEN 'EVO-29301 Analysis Pending on Part Receiving Document | T1 Preapproved'
+		ELSE ''
+		END || CASE 
 		WHEN invalidglnonpayro.businessactionid IS NOT NULL -- Invalid GL For Non-Pay Job on Repair Order
-			THEN 'EVO-34114'
-		ELSE 'N/A'
-		END AS invalidglnonpayro,
-/*	CASE removing this because it's brokebn 
+			THEN 'EVO-34114 Invalid GL Account ID = 0 Non-Pay Repair Order | T2'
+		ELSE ''
+		END ||
+	/*	CASE removing this because it's brokebn 
 		WHEN invalidgldealandinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice // UNABLE TO DIFFERENTIATE BETWEEN DEPOSIT APPLIED AND NO PAYMENT
 			THEN 'EVO-35010'
 		ELSE 'N/A'
-		END AS invalidgldealandinvoice, */ 
+		END AS invalidgldealandinvoice, */
 	CASE 
 		WHEN invalidglclaimsubmission.businessactionid IS NOT NULL
-			THEN 'EVO-29577'
-		ELSE 'N/A'
-		END,
-	CASE 
+			THEN 'EVO-29577 Invalig GL Account ID = 0 Warranty Claim Submission | T1 Preapproved'
+		ELSE ''
+		END || CASE 
 		WHEN taxidrental.businessactionid IS NOT NULL -- Rental Reservation with bad taxid
-			THEN 'EVO-12777'
-		ELSE 'N/A'
-		END AS taxidrental,
-	CASE 
+			THEN 'EVO-12777 Could not Locate Tax Entity Reservation | T2'
+		ELSE ''
+		END || CASE 
 		WHEN longvaltax.businessactionid IS NOT NULL
-			THEN 'EVO-37225'
-		ELSE 'N/A'
-		END AS longvaltax1,
-	CASE 
+			THEN 'EVO-37225 Invalid Monetary Fraction XXX Document, Long Value Tax | T2'
+		ELSE ''
+		END || CASE 
 		WHEN taxiddeal1.businessactionid IS NOT NULL -- Deal with bad taxid linked to diff store
-			THEN 'EVO-9836'
-		ELSE 'N/A'
-		END AS invaliddealunittax,
-	CASE 
+			THEN 'EVO-9836 Error Getting Unit Tax Information | T2'
+		ELSE ''
+		END || CASE 
 		WHEN taxiddeal2.businessactionid IS NOT NULL -- Deal with bad taxid linked to diff store
-			THEN 'EVO-26472'
-		ELSE 'N/A'
-		END AS errorupdatingacctg,
-	CASE 
+			THEN 'EVO-26472 Error Updating Accounting | T1 Preapproved'
+		ELSE ''
+		END || CASE 
 		WHEN taxidpartinvoice1.businessactionid IS NOT NULL -- part invoice tax entity with bad taxentityid https://lightspeeddms.atlassian.net/browse/EVO-35995
-			THEN 'EVO-35995'
-		ELSE 'N/A'
-		END AS taxidpartinvoice1,
-	CASE 
+			THEN 'EVO-35995 Could Not Locate Tax Entity XXX | T2'
+		ELSE ''
+		END || CASE 
 		WHEN tradedealid.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
-			THEN 'EVO-22520'
-		ELSE 'N/A'
-		END AS tradedealid,
-	CASE 
+			THEN 'EVO-22520 Trade Deal ID Issue Diag Not Verified | N/A'
+		ELSE ''
+		END || CASE 
 		WHEN dealunitid1.businessactionid IS NOT NULL -- MU with bad dealunitid // NOT TESTED, PLEASE CORRECT IF NOT WORKING
-			THEN 'EVO-21635'
-		ELSE 'N/A'
-		END AS dealunitid1,
-	CASE 
+			THEN 'EVO-21635 Error Accessing, RO Unit with Bad Deal ID | T1 Preapproved'
+		ELSE ''
+		END || CASE 
 		WHEN oobdupepartinvoice.businessactionid IS NOT NULL -- Tested and confirmed Duplicate Part invoice / SO
-			THEN 'EVO-36594'
-		ELSE 'N/A'
-		END AS oobdupepartinvoice,
-	CASE 
+			THEN 'EVO-36594 Duplicate Part Invoice / SO | T2'
+		ELSE ''
+		END || CASE 
 		WHEN oobmissingdiscountpartinvoice.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
-			THEN 'EVO-20828'
-		ELSE 'N/A'
-		END AS invoicemissingdiscount,
-	CASE 
+			THEN 'EVO-20828 Part Invoice OOB Missing Discounts on Lines | T2'
+		ELSE ''
+		END || CASE 
 		WHEN taxoobpartinvoice.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
-			THEN 'EVO-17198'
-		ELSE 'N/A'
-		END AS taxoobpartinvoice,
-	CASE 
+			THEN 'EVO-17198 Part Invoice OOB Tax Not Rounded Properly | T1 Preapproved'
+		ELSE ''
+		END || CASE 
+		WHEN oobmissingmoppartinvoice.businessactionid IS NOT NULL
+			THEN 'EVO-39505 Invoice OOB paid with Blank Method of Payment 0$ | T2'
+		ELSE ''
+		END || CASE 
 		WHEN oobwrongmopamountrepairorder.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
-			THEN 'EVO-30796'
-		ELSE 'N/A'
-		END AS oobwrongmopamountrepairorder,
-	CASE 
+			THEN 'EVO-30796 Repair Order OOB Method of Payment Amount Incorrect | T1 Preapproved'
+		ELSE ''
+		END || CASE 
 		WHEN oobwrongamtsalesdeal.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
-			THEN 'EVO-31125'
-		ELSE 'N/A'
-		END AS oobwrongamtsalesdeal,
-	CASE 
+			THEN 'EVO-31125 Sales Deal OOB Method of Payment != Balance to Finance | T1 Preapproved'
+		ELSE ''
+		END || CASE 
 		WHEN taxroundingrepairorder.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
-			THEN 'EVO-13501'
+			THEN 'EVO-13501 Tax Entity not rounded Repair Order | T1 Preapproved'
+		ELSE ''
+		END AS issue_description_and_cr,
+	CASE 
+		WHEN maedata.oobamt != 0
+			THEN maedata.oob
 		ELSE 'N/A'
-		END AS taxroundingrepairorder
+		END AS balancestate
 FROM mabusinessaction ba
-LEFT JOIN oob ON oob.businessactionid = ba.businessactionid
 LEFT JOIN maedata ON maedata.businessactionid = ba.businessactionid
 LEFT JOIN costore s ON s.storeid = ba.storeid
-LEFT JOIN errortxt ON errortxt.businessactionid = ba.businessactionid
-	AND num = 1
 LEFT JOIN erroraccropart earop ON earop.businessactionid = ba.businessactionid -- EVO-26911 RO Part with Bad Categoryid
 LEFT JOIN erroraccrolabor earol ON earol.businessactionid = ba.businessactionid -- EVO-18036 RO Labor with Bad Categoryid
 LEFT JOIN erroraccpicat eapicat ON eapicat.businessactionid = ba.businessactionid -- EVO-13570 Part Invoice Line with Bad Categoryid
@@ -780,6 +758,8 @@ LEFT JOIN dealunitid1 ON dealunitid1.businessactionid = ba.businessactionid -- E
 LEFT JOIN oobdupepartinvoice ON oobdupepartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid -- EVO-20828
 LEFT JOIN taxoobpartinvoice ON taxoobpartinvoice.businessactionid = ba.businessactionid -- EVO-17198 taxes oob compared to tax entity amounts
+LEFT JOIN oobmissingmoppartinvoice ON oobmissingmoppartinvoice.businessactionid = ba.businessactionid
+	AND paymentcount = 1
 LEFT JOIN oobwrongmopamountrepairorder ON oobwrongmopamountrepairorder.businessactionid = ba.businessactionid -- EVO-30796 Mop Amount less than Amount to Collect on RO
 LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.businessactionid -- EVO-31125
 LEFT JOIN taxroundingrepairorder ON taxroundingrepairorder.businessactionid = ba.businessactionid
