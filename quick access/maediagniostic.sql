@@ -646,11 +646,11 @@ SELECT maedata.documentnumber AS docnumber,
 		ELSE ''
 		END || CASE 
 		WHEN earop.businessactionid IS NOT NULL
-			THEN 'EVO-26911 Error Accessing RO Part Category'
+			THEN 'EVO-26911 Error Accessing RO Part Category | T2'
 		ELSE ''
 		END || CASE 
 		WHEN earol.businessactionid IS NOT NULL
-			THEN 'EVO-18036 Error Accessing RO Labor Category'
+			THEN 'EVO-18036 Error Accessing RO Labor Category | T2'
 		ELSE ''
 		END || CASE 
 		WHEN erroraccmiscsaletype.businessactionid IS NOT NULL
@@ -658,15 +658,15 @@ SELECT maedata.documentnumber AS docnumber,
 		ELSE ''
 		END || CASE 
 		WHEN eapicat.businessactionid IS NOT NULL -- Error Accessing on Part Invoice // Verified Diag To Work
-			THEN 'EVO-13570 Error Accessing Part Invoice Category'
+			THEN 'EVO-13570 Error Accessing Part Invoice Category | T2'
 		ELSE ''
 		END || CASE 
 		WHEN earpcat.businessactionid IS NOT NULL -- Error Accessing On Part Receiving Document
-			THEN 'EVO-31748 Error Accessing Receiving Document Part Category'
+			THEN 'EVO-31748 Error Accessing Receiving Document Part Category | T2'
 		ELSE ''
 		END || CASE 
 		WHEN partinvoicescheduledmu.businessactionid IS NOT NULL -- Error Accessing On Part Receiving Document
-			THEN 'EVO-14901 Part Category Has MU Scheduled Inventory Account'
+			THEN 'EVO-14901 Part Category Has MU Scheduled Inventory Account | T2'
 		ELSE ''
 		END || CASE 
 		WHEN analysispending.businessactionid IS NOT NULL -- Analysis Pending On Part Receiving Document
