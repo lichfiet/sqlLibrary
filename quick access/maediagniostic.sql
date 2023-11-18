@@ -544,6 +544,22 @@ AS (
 		AND (piti.taxamount - pite.taxamount) = maedata.oobamt
 	GROUP BY ba.businessactionid
 	),
+armopinternalinvoice
+AS (
+	SELECT ba.businessactionid
+	FROM mabusinessaction ba
+	INNER JOIN mabusinessactionerror bae using (businessactionid)
+	INNER JOIN papartinvoice pi ON pi.partinvoiceid = ba.documentid
+	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = pi.commoninvoiceid
+	WHERE ba.STATUS = 2
+		AND bae.errortext ilike 'No A/R Customer for Method of Payment %'
+		AND pi.invoicetype = 1
+		AND pi.majorunitid > 0
+		AND cip.amount = 0
+		AND pi.createdate BETWEEN '2020-10-01'
+			AND '2020-12-19'
+	GROUP BY ba.businessactionid
+	),
 oobmissingmoppartinvoice
 AS (
 	SELECT count(pi.partinvoiceid) OVER (PARTITION BY pi.partinvoiceid) AS paymentcount,
@@ -707,6 +723,10 @@ SELECT maedata.documentnumber AS docnumber,
 			THEN 'EVO-20828 Part Invoice OOB Missing Discounts on Lines | T2'
 		ELSE ''
 		END || CASE 
+		WHEN armopinternalinvoice.businessactionid IS NOT NULL
+			THEN 'EVO-31066 Internal Invoice Using AR MOP | T1 Preapproved'
+		ELSE ''
+		END || CASE 
 		WHEN taxoobpartinvoice.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
 			THEN 'EVO-17198 Part Invoice OOB Tax Not Rounded Properly | T1 Preapproved'
 		ELSE ''
@@ -760,6 +780,7 @@ LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.busines
 LEFT JOIN taxoobpartinvoice ON taxoobpartinvoice.businessactionid = ba.businessactionid -- EVO-17198 taxes oob compared to tax entity amounts
 LEFT JOIN oobmissingmoppartinvoice ON oobmissingmoppartinvoice.businessactionid = ba.businessactionid
 	AND paymentcount = 1
+LEFT JOIN armopinternalinvoice ON armopinternalinvoice.businessactionid = ba.businessactionid -- EVO-31066
 LEFT JOIN oobwrongmopamountrepairorder ON oobwrongmopamountrepairorder.businessactionid = ba.businessactionid -- EVO-30796 Mop Amount less than Amount to Collect on RO
 LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.businessactionid -- EVO-31125
 LEFT JOIN taxroundingrepairorder ON taxroundingrepairorder.businessactionid = ba.businessactionid
