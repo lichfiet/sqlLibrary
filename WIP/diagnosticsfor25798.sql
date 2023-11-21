@@ -29,7 +29,7 @@ SELECT v.name,
 		0 - ROUND((
 				SUM(sl.remainingamt) OVER (PARTITION BY sl.acctid) - SUM(CASE 
 						WHEN voids.id IS NOT NULL
-							THEN 0
+							THEN docamt
 						WHEN (docamt - sum(amtpaidthischeck)) <= 0
 							THEN 0
 						WHEN (docamt - sum(amtpaidthischeck)) != docamt
@@ -38,18 +38,19 @@ SELECT v.name,
 						END) OVER (PARTITION BY sl.acctid)
 				) * .0001, 2)
 		)::VARCHAR AS net_vendor_adjustment,
-	/* Net Adjustment Amount */
-	Round(0 - (
+	/* Net Adjustment Amount */ (
+		0 - (
 			ROUND((sl.remainingamt * .0001), 2) - CASE 
 				WHEN voids.id IS NOT NULL
+					THEN ROUND((docamt * .0001), 2)
+				WHEN ((docamt - sum(amtpaidthischeck)) * .0001) <= 0
 					THEN 0
-				WHEN (docamt - sum(amtpaidthischeck)) <= 0
-					THEN 0
-				WHEN (docamt - sum(amtpaidthischeck)) != docamt
-					THEN ROUND(docamt - sum(amtpaidthischeck), 2)
+				WHEN ((docamt - sum(amtpaidthischeck))) != docamt
+					THEN ROUND(((docamt - sum(amtpaidthischeck)) * .0001), 2)
 				ELSE 0
-				END * .0001
-			), 2) AS net_invoice_adjustment,
+				END
+			)
+		) AS net_invoice_adjustment,
 	/* Remaining Amount*/ ROUND((sl.remainingamt * .0001), 2) AS current_remaining_amt,
 	--
 	/* Invoice Amount */ ROUND((sl.docamt * .0001), 2) AS invoice_amount,
@@ -59,7 +60,7 @@ SELECT v.name,
 	/* Correct Remaing Amount */
 	CASE 
 		WHEN voids.id IS NOT NULL
-			THEN 0
+			THEN ROUND((docamt * .0001),2)
 		WHEN ((docamt - sum(amtpaidthischeck)) * .0001) <= 0
 			THEN 0
 		WHEN ((docamt - sum(amtpaidthischeck))) != docamt
@@ -134,7 +135,7 @@ WHERE (
 			)
 		OR voids.id IS NOT NULL
 		)
---	AND v.vendornumber IN (xxxxxx) -- Makes sure we don't included voided checks in the paid so far sum
+--	AND v.vendornumber = 410928 -- Makes sure we don't included voided checks in the paid so far sum
 GROUP BY apinvoiceid,
 	sl.documentnumber,
 	sl.description,
