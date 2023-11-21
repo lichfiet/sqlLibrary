@@ -29,6 +29,13 @@ GROUP BY xr.acctdeptid,
 HAVING COUNT(xr.acctdeptid) < 2
 ORDER BY COUNT(xr.acctdeptid) DESC
 */
+/* Level greater than 9 on account (Causes COA to be unable to calculate. Numbers greater than 9 can be used but it's not advised)*/
+SELECT coa.acctdeptid,
+	coa.acctdept,
+	coa.totallevel,
+	coa.sequencenumber
+FROM glchartofaccounts coa
+WHERE abs(totallevel) > 9;
 
 /* DEFECTS AND PRODUCT CRs */
 /*glconsxref entry mapped to invalid GL Account*/-- used to be 13 and 8 and 6
@@ -91,7 +98,7 @@ SELECT h.glhistoryid,
 		ELSE h.description
 		END AS description,
 	h.journalentryid,
-	h.date,
+	h.DATE,
 	h.amtdebit,
 	h.amtcredit,
 	coa.acctdept,
@@ -121,7 +128,6 @@ WHERE (
 		OR h.locationidluid != sm.childstoreidluid
 		OR h.locationid != sm.childstoreid
 		);
-
 
 /*Multiple Entries in GL Balance for 1 Acctdeptid*/
 SELECT 'duplicate glbalance entry for acctdeptid ' || b.acctdeptid AS description,
