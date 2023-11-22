@@ -81,11 +81,11 @@ AS (
 		to_char(documentdate, 'YYYY / MM / DD') AS docdate,
 		sum(bai.debitamt - creditamt * .0001) AS oobamt,
 		CASE 
-			WHEN sum(debitamt - creditamt * .0001) = 0
+			WHEN sum(debitamt - creditamt) = 0
 				THEN 'In Balance'
 			ELSE 'Out of Balance!'
 			END AS oob,
-		left(string_agg(errortext, ''), 37) || '...' AS txt
+		left(string_agg(errortext, ''), 70) || '...' AS txt
 	FROM mabusinessaction ba
 	LEFT JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid
 	LEFT JOIN mabusinessactionerror bae ON bae.businessactionid = ba.businessactionid
@@ -629,7 +629,6 @@ SELECT maedata.documentnumber AS docnumber,
 	maedata.doctype AS documenttype,
 	maedata.errorstatus AS STATUS,
 	maedata.docdate AS DATE,
-	maedata.txt AS errormessage,
 	s.storename,
 	ba.documentid,
 	CASE 
@@ -751,7 +750,8 @@ SELECT maedata.documentnumber AS docnumber,
 		WHEN maedata.oobamt != 0
 			THEN maedata.oob
 		ELSE 'N/A'
-		END AS balancestate
+		END AS balancestate,
+ 	maedata.txt AS errormessage
 FROM mabusinessaction ba
 LEFT JOIN maedata ON maedata.businessactionid = ba.businessactionid
 LEFT JOIN costore s ON s.storeid = ba.storeid
