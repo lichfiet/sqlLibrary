@@ -677,7 +677,7 @@ SELECT maedata.documentnumber AS docnumber,
 	maedata.doctype AS documenttype,
 	maedata.errorstatus AS STATUS,
 	maedata.docdate AS DATE,
-	s.storename || ', ' || s.storeid::varchar AS storeandstoreid,
+	s.storename || ', Id:' || s.storeid::varchar AS storeandstoreid,
 	ba.documentid,
 	CASE 
 		WHEN missingmae.businessactionid IS NOT NULL
