@@ -150,6 +150,54 @@ AS (
 		AND mi.arcustomerid > 0
 	GROUP BY ma.businessactionid
 	),
+dealarglaccount
+AS (
+	SELECT DUMP.errorid AS businessactionid
+	FROM mabusinessactionitem bi
+	INNER JOIN costoremap cm ON cm.childstoreid = bi.storeid
+	LEFT JOIN cocustomer cc ON cc.customerid = bi.arid
+	LEFT JOIN apvendor v ON v.vendorid = bi.apid
+	INNER JOIN (
+		SELECT accountingid AS prefAcctID,
+			p.value AS APdefault,
+			p2.value AS ARdefault
+		FROM acpreference p
+		INNER JOIN acpreference p2 USING (accountingid)
+		WHERE p.id = 'acct-APPreferencesAPGLAcctDeptID'
+			AND p2.id = 'acct-ARPreferencesReceivablesGLAcctDeptID'
+		) pref ON pref.prefacctid = cm.parentstoreid
+	INNER JOIN (
+		SELECT ba1.businessactionid,
+			ba1.invoicenumber,
+			row_Number() OVER (
+				PARTITION BY ba.documentnumber ORDER BY ba1.invoicenumber DESC
+				) AS num,
+			ba.businessactionid AS errorid
+		FROM mabusinessaction ba
+		INNER JOIN mabusinessaction ba1 USING (documentnumber)
+		WHERE ba.STATUS = 2
+			AND ba.documenttype = 3006
+			AND ba1.documenttype = 3001
+			AND ba1.invoicenumber < ba.invoicenumber
+			AND ba.storeid = ba1.storeid
+		) DUMP ON bi.businessactionid = DUMP.businessactionid
+	WHERE (
+			bi.apid != 0
+			OR bi.arid != 0
+			)
+		AND DUMP.num = 1
+		AND bi.accountid != CASE 
+			WHEN overrideapacct = 1
+				THEN apglacctdeptid
+			WHEN overrideapacct <> 1
+				THEN CAST(pref.APdefault AS BIGINT)
+			WHEN arreceivablegloverride = 1
+				THEN cc.arreceivableglacctdeptid
+			WHEN arreceivablegloverride <> 1
+				THEN CAST(pref.ARdefault AS BIGINT)
+			END
+	GROUP BY DUMP.errorid
+	),
 erroraccropart
 AS (
 	SELECT ba.businessactionid
@@ -644,6 +692,10 @@ SELECT maedata.documentnumber AS docnumber,
 			THEN 'EVO-33866 Scheduled Not Valid for A/R Customerid XXXXX Misc Receipt | T1 Preapproved'
 		ELSE ''
 		END || CASE 
+		WHEN dealarglaccount.businessactionid IS NOT NULL
+			THEN 'EVO-3087 Scheduled Account XXXX Not Valid for A/R Customerid XXXXX Sales Deal | T1 Front End Fix, See CR for info'
+		ELSE ''
+		END || CASE 
 		WHEN earop.businessactionid IS NOT NULL
 			THEN 'EVO-26911 Error Accessing RO Part Category | T2'
 		ELSE ''
@@ -751,7 +803,7 @@ SELECT maedata.documentnumber AS docnumber,
 			THEN maedata.oob
 		ELSE 'N/A'
 		END AS balancestate,
- 	maedata.txt AS errormessage
+	maedata.txt AS errormessage
 FROM mabusinessaction ba
 LEFT JOIN maedata ON maedata.businessactionid = ba.businessactionid
 LEFT JOIN costore s ON s.storeid = ba.storeid
@@ -768,6 +820,7 @@ LEFT JOIN invalidgldealandinvoice ON invalidgldealandinvoice.businessactionid = 
 LEFT JOIN invalidglclaimsubmission ON invalidglclaimsubmission.businessactionid = ba.businessactionid -- EVO-29577
 LEFT JOIN schedacctnotvalidar ON schedacctnotvalidar.businessactionid = ba.businessactionid -- EVO-38907 AR Sched Acct not valid for MOP
 LEFT JOIN miscinvnonarmop ON miscinvnonarmop.businessactionid = ba.businessactionid -- EVO-33866 AR Sched Invalid for Misc Receipt
+LEFT JOIN dealarglaccount ON dealarglaccount.businessactionid = ba.businessactionid -- EVO-3087
 LEFT JOIN taxidrental ON taxidrental.businessactionid = ba.businessactionid -- EVO-12777 Rental Reservation with bad rental posting taxid
 LEFT JOIN longvaltax ON longvaltax.businessactionid = ba.businessactionid -- EVO-37225 long val tax not rounded
 LEFT JOIN taxiddeal1 ON taxiddeal1.businessactionid = ba.businessactionid -- EVO-9836 Deal Unit tax with invalid taxentityid
