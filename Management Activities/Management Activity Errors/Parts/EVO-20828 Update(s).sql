@@ -7,7 +7,8 @@
 
 -- EXPERIMENTAL UPDATE WITH DIAG PLEASE USE, Need to add a join to eliminate non-pay part invoices because they show the same output with the diag
 UPDATE papartinvoiceline pil
-SET adjustmentprice = adjustmentprice + bob.adjamt
+SET adjustmentprice = adjustmentprice + bob.adjamt,
+	islinediscount = 1
 FROM (
 	SELECT partinvoicelineid,
 		row_Number() OVER (
