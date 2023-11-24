@@ -253,6 +253,67 @@ ORDER BY hist.accountingid,
 	coa.acctdept;
 
 /*oob transaction*/
+WITH hist
+AS (
+	SELECT sum(amtdebit - amtcredit) AS storebal,
+		h.journalentryid,
+		locationid,
+		accountingid,
+		max(DATE) AS DATE
+	FROM glhistory h
+	WHERE jestate IN (1, 2)
+	GROUP BY locationid,
+		journalentryid,
+		accountingid
+	),
+balperstore
+AS (
+	SELECT journalentryid,
+		max(LEFT(DATE::VARCHAR, 10)) AS DATE,
+		count(storebal) AS balances,
+		array_agg(locationid),
+		sum(storebal) AS oobsum,
+		accountingid
+	FROM hist
+	WHERE hist.storebal != 0
+	GROUP BY journalentryid,
+		accountingid
+	)
+SELECT 'transaction does not balance' AS description,
+	bps.journalentryid,
+	bps.accountingid,
+	DATE,
+	Round((oobsum * .0001), 2) AS oob_amount,
+	CASE 
+		WHEN balances > 1
+			AND oobsum = 0
+			THEN 'Out of Balance Across Stores'
+		WHEN balances > 1
+			AND oobsum != 0
+			THEN 'Out of Balance Individual Stores'
+		WHEN balances = 1
+			THEN 'Out of Balance Single Store'
+		END AS bal_across_stores
+FROM balperstore bps
+LEFT JOIN (
+	SELECT LEFT(DATE::VARCHAR, 10) AS day,
+		accountingid
+	FROM glhistory h
+	GROUP BY accountingid,
+		LEFT(DATE::VARCHAR, 10)
+	HAVING SUM(amtdebit) - SUM(amtcredit) != 0
+	ORDER BY MAX(DATE) DESC
+	) daybalance ON daybalance.day = DATE
+	AND bps.accountingid = daybalance.accountingid
+WHERE (
+		balances = 1
+		AND daybalance.day IS NOT NULL
+		)
+	OR balances > 1
+ORDER BY DATE DESC;
+
+-- This is the traditional oob SQL, testing above for cross-store oobs
+/*
 SELECT 'transaction does not balance' AS description,
 	journalentryid,
 	accountingid,
@@ -280,7 +341,8 @@ HAVING SUM(amtdebit) - SUM(amtcredit) != 0
 		HAVING SUM(amtdebit) - SUM(amtcredit) != 0
 		ORDER BY MAX(DATE) DESC
 		)
-ORDER BY MAX(DATE) DESC;
+ORDER BY MAX(DATE) DESC; 
+*/
 
 /* day does not balance */
 SELECT 'day does not balance' AS description,
