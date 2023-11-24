@@ -5,51 +5,7 @@
 -- Jira Key/CR Number: EVO-20828 | https://lightspeeddms.atlassian.net/jira/software/c/projects/EVO/issues/EVO-20828
 -- SQL Statement:
 
-
-
-
--- trevors'
-
-UPDATE papartinvoiceline pil
-SET adjustmentprice = pil.adjustmentprice + bob.oob_amount
-FROM (
-	SELECT partinvoicelineid,
-		sum(debitamt) AS debits,
-		sum(creditamt) AS credits,
-		(sum(debitamt) - sum(creditamt)) AS OOB_Amount,
-		pil.adjustmentprice
-	FROM papartinvoiceline pil -- select the list of part invoice lines
-	INNER JOIN mabusinessaction ba ON ba.documentid = pil.partinvoiceid -- join to compare commoninvoicenumber and management activity
-	INNER JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid -- join to grab list of all management activity accounting entries to be made
-	WHERE ba.invoicenumber = '119754' 
-	    AND qtysold = 10000 -- where quantity sold is only 1
-	GROUP BY partinvoicelineid -- allows totalling per part invoice line
-	ORDER BY pil.adjustmentprice DESC
-	LIMIT 1
-	) bob
-WHERE bob.partinvoicelineid = pil.partinvoicelineid
-
--- OR, if there is more than one part sold on all lines, you can try this one
-
-UPDATE papartinvoiceline pil
-SET adjustmentprice = adjustmentprice + bob.test
-FROM (
-	SELECT partinvoicelineid,
-		sum(debitamt) AS debits,
-		sum(creditamt) AS credits,
-		(sum(debitamt) - sum(creditamt)) AS OOB_Amount,
-		(Round(((sum(debitamt) - sum(creditamt)) / qtysold), 4) * 10000)::INTEGER AS test
-	FROM papartinvoiceline pil
-	INNER JOIN mabusinessaction ba ON ba.documentid = pil.partinvoiceid
-	INNER JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid
-	WHERE ba.invoicenumber = '318518'
-	GROUP BY partinvoicelineid LIMIT 1
-	) bob
-WHERE bob.partinvoicelineid = pil.partinvoicelineid;
-
-
-
--- EXPERIMENTAL UPDATE WITH DIAG, Need to add a join to eliminate non-pay part invoices because they show the same output with the diag
+-- EXPERIMENTAL UPDATE WITH DIAG PLEASE USE, Need to add a join to eliminate non-pay part invoices because they show the same output with the diag
 UPDATE papartinvoiceline pil
 SET adjustmentprice = adjustmentprice + bob.adjamt
 FROM (
@@ -132,3 +88,46 @@ FROM (
 	) bob
 WHERE bob.partinvoicelineid = pil.partinvoicelineid
 	AND row_number = 1;
+
+
+
+
+-- DONT USE THESE SQLS FOR NOW, TEST ABOVE SQLS
+-- trevors'
+
+UPDATE papartinvoiceline pil
+SET adjustmentprice = pil.adjustmentprice + bob.oob_amount
+FROM (
+	SELECT partinvoicelineid,
+		sum(debitamt) AS debits,
+		sum(creditamt) AS credits,
+		(sum(debitamt) - sum(creditamt)) AS OOB_Amount,
+		pil.adjustmentprice
+	FROM papartinvoiceline pil -- select the list of part invoice lines
+	INNER JOIN mabusinessaction ba ON ba.documentid = pil.partinvoiceid -- join to compare commoninvoicenumber and management activity
+	INNER JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid -- join to grab list of all management activity accounting entries to be made
+	WHERE ba.invoicenumber = '119754' 
+	    AND qtysold = 10000 -- where quantity sold is only 1
+	GROUP BY partinvoicelineid -- allows totalling per part invoice line
+	ORDER BY pil.adjustmentprice DESC
+	LIMIT 1
+	) bob
+WHERE bob.partinvoicelineid = pil.partinvoicelineid
+
+-- OR, if there is more than one part sold on all lines, you can try this one
+
+UPDATE papartinvoiceline pil
+SET adjustmentprice = adjustmentprice + bob.test
+FROM (
+	SELECT partinvoicelineid,
+		sum(debitamt) AS debits,
+		sum(creditamt) AS credits,
+		(sum(debitamt) - sum(creditamt)) AS OOB_Amount,
+		(Round(((sum(debitamt) - sum(creditamt)) / qtysold), 4) * 10000)::INTEGER AS test
+	FROM papartinvoiceline pil
+	INNER JOIN mabusinessaction ba ON ba.documentid = pil.partinvoiceid
+	INNER JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid
+	WHERE ba.invoicenumber = '318518'
+	GROUP BY partinvoicelineid LIMIT 1
+	) bob
+WHERE bob.partinvoicelineid = pil.partinvoicelineid;
