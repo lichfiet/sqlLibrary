@@ -1,11 +1,13 @@
-/* Accounting Health Check */
-/*	
+/* Accounting Health Check 
+
     The first half of these SQLs are to pin-point setup related issues with the chart of accounts.
     
     The other half point out Product CRs or issues caused by Product CRs.
 */
+--
 /* SETUP ISSUES */
-/*Detail Account Consolidating to More than 1 Consolidated Account*/-- used to be 14
+--
+-- Detail Account Consolidating to More than 1 Consolidated Account
 SELECT 'Account code ' || coa.acctdept || ' is consolidated to more than one account' AS description,
 	'(# of Consolidation): ' || COUNT(xr.acctdeptid) AS consolidation_count,
 	xr.acctdeptid AS cons_acctdeptid
@@ -15,21 +17,22 @@ GROUP BY xr.acctdeptid,
 	coa.acctdeptid
 HAVING COUNT(xr.acctdeptid) > 1;
 
-/* Less than 2 consolidations for P&L Accounts
-
+--
+-- Less than 2 consolidations for P&L Accounts
 SELECT 'Account code ' || coa.acctdept || ' is a detail account, consolidated to less than one account' AS description,
 	'(# of Consolidation): ' || COUNT(xr.acctdeptid) AS consolidation_count,
 	xr.acctdeptid AS cons_acctdeptid
 FROM glconsxref xr
 LEFT JOIN glchartofaccounts coa ON coa.acctdeptid = xr.acctdeptid
 WHERE coa.accttype IN (3, 4, 6)
-    AND consind = 0
+	AND consind = 0
 GROUP BY xr.acctdeptid,
 	coa.acctdeptid
 HAVING COUNT(xr.acctdeptid) < 2
-ORDER BY COUNT(xr.acctdeptid) DESC
-*/
-/* Level greater than 9 on account (Causes COA to be unable to calculate. Numbers greater than 9 can be used but it's not advised)*/
+ORDER BY COUNT(xr.acctdeptid) DESC;
+
+--
+-- Level greater than 9 on account (Causes COA to be unable to calculate. Numbers greater than 9 can be used but it's not advised) 
 SELECT coa.acctdeptid,
 	coa.acctdept,
 	coa.totallevel,
@@ -38,7 +41,7 @@ FROM glchartofaccounts coa
 WHERE abs(totallevel) > 9;
 
 /* DEFECTS AND PRODUCT CRs */
-/*glconsxref entry mapped to invalid GL Account*/-- used to be 13 and 8 and 6
+-- glconsxref entry mapped to invalid GL Account
 SELECT 'glconsxref entry mapped to invalid GL Account OR invalid accountingid' AS description,
 	xref.glconsxrefid,
 	xref.acctdeptid,
@@ -82,7 +85,7 @@ WHERE det.acctdeptid IS NULL
 ORDER BY det.acctdeptid,
 	cons.acctdeptid;
 
-/*glhistory entries with invalid jtypeid within last 4 years*/-- needs modification
+-- glhistory entries with invalid jtypeid within last 4 years / needs modification
 SELECT *
 FROM glhistory
 LEFT JOIN gljournaltype jt ON journaltypeid = jtypeid
@@ -90,8 +93,7 @@ WHERE journaltypeid IS NULL
 	AND postingdate > '2018-01-01'
 ORDER BY DATE DESC;
 
-/*glhistory entries have an invalid ids or idluids*/-- output 15
-
+-- glhistory entries have an invalid ids or idluids 
 SELECT h.glhistoryid,
 	CASE 
 		WHEN length(h.description) > 23
@@ -120,7 +122,7 @@ SELECT h.glhistoryid,
 			THEN 'locationidluid incorrect, '
 		ELSE ''
 		END AS bad_ids,
-	array[h.accountingid, h.accountingidluid, h.locationid, h.locationidluid] AS acctgidsandlocationid
+	array [h.accountingid, h.accountingidluid, h.locationid, h.locationidluid] AS acctgidsandlocationid
 --	sm.storeids AS possiblestoreids,
 --	sm.storeidluids AS possiblestoreidluids
 FROM glhistory h
@@ -142,9 +144,9 @@ WHERE (
 		)
 ORDER BY h.DATE DESC;
 
--- old one commented out while testing new above sql
-/*
-SELECT h.glhistoryid,
+-- old one
+SELECT 'CAVEMAN INVALID ID',
+	h.glhistoryid,
 	CASE 
 		WHEN length(h.description) > 23
 			THEN left(h.description, 25) || '....'
@@ -180,10 +182,9 @@ WHERE (
 		OR h.accountingid != coa.accountingid
 		OR h.locationidluid != sm.childstoreidluid
 		OR h.locationid != sm.childstoreid
-		);
-*/
+		) LIMIT 10;
 
-/*Multiple Entries in GL Balance for 1 Acctdeptid*/
+-- Multiple Entries in GL Balance for 1 Acctdeptid
 SELECT 'duplicate glbalance entry for acctdeptid ' || b.acctdeptid AS description,
 	coa.acctdept,
 	b.fiscalyear,
@@ -196,7 +197,7 @@ GROUP BY coa.acctdept,
 	b.storeid
 HAVING count(b.fiscalyear) > 1;
 
-/*glbalance entries with a storeid not valid with costoremap*/
+-- glbalance entries with a storeid not valid with costoremap
 SELECT 'gl balance entry with invalid store, check output 4 as potential cause' AS description,
 	glbalancesid,
 	coa.acctdept,
@@ -207,7 +208,7 @@ LEFT JOIN costoremap sm ON sm.parentstoreid = b.accountingid
 INNER JOIN glchartofaccounts coa ON coa.acctdeptid = b.acctdeptid
 WHERE sm.childstoreid IS NULL;
 
-/*acctdeptid in glhistory not in glchartofaccounts*/
+-- acctdeptid in glhistory not in glchartofaccounts
 SELECT 'acctdeptid in glhistory not in glchartofaccounts' AS description,
 	hist.glhistoryid,
 	hist.acctdeptid,
@@ -218,7 +219,7 @@ FROM glhistory hist
 LEFT JOIN glchartofaccounts coa ON hist.acctdeptid = coa.acctdeptid
 WHERE coa.acctdeptid IS NULL;
 
-/*acctdeptid not in glbalance table*/
+-- acctdeptid not in glbalance table
 SELECT 'acctdeptid not in glbalance table' AS description,
 	hist.glhistoryid,
 	hist.acctdeptid,
@@ -313,8 +314,7 @@ WHERE (
 ORDER BY DATE DESC;
 
 -- This is the traditional oob SQL, testing above for cross-store oobs
-/*
-SELECT 'transaction does not balance' AS description,
+SELECT 'transaction does not balance, CAVEMAN OOB' AS description,
 	journalentryid,
 	accountingid,
 	MAX(DATE),
@@ -341,8 +341,7 @@ HAVING SUM(amtdebit) - SUM(amtcredit) != 0
 		HAVING SUM(amtdebit) - SUM(amtcredit) != 0
 		ORDER BY MAX(DATE) DESC
 		)
-ORDER BY MAX(DATE) DESC; 
-*/
+ORDER BY MAX(DATE) DESC LIMIT 100;
 
 /* day does not balance */
 SELECT 'day does not balance' AS description,
