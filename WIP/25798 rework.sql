@@ -80,42 +80,18 @@ WHERE gls.storeid = 0
 --                             888                                    
 --                             888                                    
 --
+-- Updates remaining amount and state for invoices over/under/not paid
+--
 UPDATE glsltransaction sl
-SET sl.sltrxstate = bob.newstate,
-	sl.remainingamt = bob.corr_remain
+SET sltrxstate = bob.newstate,
+	remainingamt = bob.corr_remain
 FROM (
 	SELECT v.name,
 		/* Invoice Number */ sl.documentnumber AS invoicenumber,
-		'$' || (
-			0 - ROUND((
-					SUM(sl.remainingamt) OVER (PARTITION BY sl.acctid) - SUM(CASE 
-							WHEN voids.id IS NOT NULL
-								THEN 0
-							WHEN (docamt - sum(amtpaidthischeck)) <= 0
-								THEN 0
-							WHEN (docamt - sum(amtpaidthischeck)) != docamt
-								THEN (docamt - sum(amtpaidthischeck))
-							ELSE 0
-							END) OVER (PARTITION BY sl.acctid)
-					) * .0001, 2)
-			)::VARCHAR AS net_vendor_adjustment,
-		/* Net Adjustment Amount */ (
-			0 - (
-				ROUND((sl.remainingamt * .0001), 2) - CASE 
-					WHEN voids.id IS NOT NULL
-						THEN 0
-					WHEN ((docamt - sum(amtpaidthischeck)) * .0001) <= 0
-						THEN 0
-					WHEN ((docamt - sum(amtpaidthischeck))) != docamt
-						THEN ROUND(((docamt - sum(amtpaidthischeck)) * .0001), 2)
-					ELSE 0
-					END
-				)
-			) AS net_invoice_adjustment,
 		/* Correct Remaing Amount */
 		CASE 
 			WHEN voids.id IS NOT NULL
-				THEN 0
+				THEN docamt
 			WHEN (docamt - sum(amtpaidthischeck)) <= 0
 				THEN 0
 			WHEN (docamt - sum(amtpaidthischeck)) != docamt
@@ -123,22 +99,20 @@ FROM (
 			ELSE 0
 			END AS corr_remain,
 		/* */
-		/* Invoice Description */ sl.description,
 		/* SLTRX State */
 		CASE 
 			WHEN voids.id IS NOT NULL -- if part of the voided checks list
 				THEN 1
-			WHEN ((docamt - sum(amtpaidthischeck)) * .0001) <= 0 -- If the sum of payments <= 0
+			WHEN ((docamt - sum(amtpaidthischeck))) <= 0 -- If the sum of payments <= 0
 				THEN 4 --FULLY PAID
-			WHEN ((docamt - sum(amtpaidthischeck)) * .0001) != docamt -- If the sum of payments = part of the invoice amt
+			WHEN ((docamt - sum(amtpaidthischeck))) != docamt -- If the sum of payments = part of the invoice amt
 				THEN 2 -- PARTIALLY PAID
-			WHEN ((docamt - sum(amtpaidthischeck)) * .0001) = docamt --- IF the sum of check payments = 0
+			WHEN ((docamt - sum(amtpaidthischeck))) = docamt --- IF the sum of check payments = 0
 				THEN 1 -- UNPAID
 			ELSE 0 -- Panic if you get a zero
 			END AS newstate,
 		/* */
-		/* Current State */ sl.sltrxstate AS oldstate,
-		--
+		/* sltrxid (needed for the left join on voids)*/
 		CASE 
 			WHEN voids.id IS NOT NULL
 				THEN voids.id
@@ -174,7 +148,7 @@ FROM (
 				)
 			OR voids.id IS NOT NULL
 			)
-	--	AND v.vendornumber = 410928 -- Makes sure we don't included voided checks in the paid so far sum
+	--	AND v.vendornumber = 4381458 
 	GROUP BY apinvoiceid,
 		sl.documentnumber,
 		sl.description,
@@ -203,16 +177,23 @@ WHERE sl.sltrxid = bob.identifier;
 --                             888                                    
 --                             888                                    
 --
+-- Voids Invoice with No GL History Info
 --
-SELECT sltrxid
-FROM glsltransaction gls
-INNER JOIN apvendor v ON v.vendorid = gls.acctid
-LEFT JOIN glhistory h ON h.journalentryid = gls.docrefglid
-WHERE h.glhistoryid IS NULL
-	AND sltrxstate IN (1, 2)
-	AND v.vendornumber = 1
-GROUP BY gls.sltrxid
-HAVING count(distinct vendornumber) = 1
+UPDATE glsltransaction sl
+SET sltrxstate = 9
+FROM (
+	SELECT sltrxid
+	FROM glsltransaction gls
+	INNER JOIN apvendor v ON v.vendorid = gls.acctid
+	LEFT JOIN glhistory h ON h.journalentryid = gls.docrefglid
+	WHERE h.glhistoryid IS NULL
+		AND sltrxstate IN (1, 2)
+		AND v.vendornumber = 1
+	GROUP BY gls.sltrxid
+	HAVING count(distinct vendornumber) = 1
+) bob
+WHERE bob.sltrxid = sl.sltrxid
+
 --
 -- mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm
 --
@@ -685,5 +666,7 @@ GROUP BY apinvoiceid,
 	v.name
 HAVING sum(amtpaidthischeck) != (docamt - remainingamt)
 	OR voids.id IS NOT NULL;
+
+
 
 
