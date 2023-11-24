@@ -144,46 +144,6 @@ WHERE (
 		)
 ORDER BY h.DATE DESC;
 
--- old one
-SELECT 'CAVEMAN INVALID ID',
-	h.glhistoryid,
-	CASE 
-		WHEN length(h.description) > 23
-			THEN left(h.description, 25) || '....'
-		ELSE h.description
-		END AS description,
-	h.journalentryid,
-	h.DATE,
-	h.amtdebit,
-	h.amtcredit,
-	coa.acctdept,
-	CASE 
-		WHEN h.accountingid != coa.accountingid
-			THEN 'accountingid incorrect, '
-		ELSE ''
-		END || CASE 
-		WHEN h.accountingidluid != coa.accountingidluid
-			THEN 'accountingidluid incorrect, '
-		ELSE ''
-		END || CASE 
-		WHEN h.locationid != sm.childstoreid
-			THEN 'locationid incorrect, '
-		ELSE ''
-		END || CASE 
-		WHEN h.locationidluid != sm.childstoreidluid
-			THEN 'locationidluid incorrect, '
-		ELSE ''
-		END AS bad_ids
-FROM glhistory h
-INNER JOIN glchartofaccounts coa ON coa.acctdeptid = h.acctdeptid
-INNER JOIN costoremap sm ON sm.parentstoreid = coa.accountingid
-WHERE (
-		h.accountingidluid != coa.accountingidluid
-		OR h.accountingid != coa.accountingid
-		OR h.locationidluid != sm.childstoreidluid
-		OR h.locationid != sm.childstoreid
-		) LIMIT 10;
-
 -- Multiple Entries in GL Balance for 1 Acctdeptid
 SELECT 'duplicate glbalance entry for acctdeptid ' || b.acctdeptid AS description,
 	coa.acctdept,
@@ -312,36 +272,6 @@ WHERE (
 		)
 	OR balances > 1
 ORDER BY DATE DESC;
-
--- This is the traditional oob SQL, testing above for cross-store oobs
-SELECT 'transaction does not balance, CAVEMAN OOB' AS description,
-	journalentryid,
-	accountingid,
-	MAX(DATE),
-	ROUND((SUM(amtdebit) * .0001), 4) AS debits,
-	ROUND((SUM(amtcredit) * .0001), 4) AS credits,
-	ROUND(((SUM(amtdebit) * .0001) - (SUM(amtcredit) * .0001)), 4) AS discrepancy_amt,
-	CASE 
-		WHEN MAX(DATE) > s.conversiondate
-			THEN 'may be valid'
-		ELSE 'potential conversion defect'
-		END AS validity
-FROM glhistory h
-INNER JOIN costoremap sm ON sm.parentstoreid = h.accountingid
-INNER JOIN costore s ON s.storeid = sm.childstoreid
-GROUP BY journalentryid,
-	accountingid,
-	s.conversiondate
-HAVING SUM(amtdebit) - SUM(amtcredit) != 0
-	AND LEFT(MAX(DATE::VARCHAR), 10) IN (
-		SELECT LEFT(DATE::VARCHAR, 10)
-		FROM glhistory h
-		GROUP BY accountingid,
-			LEFT(DATE::VARCHAR, 10)
-		HAVING SUM(amtdebit) - SUM(amtcredit) != 0
-		ORDER BY MAX(DATE) DESC
-		)
-ORDER BY MAX(DATE) DESC LIMIT 100;
 
 /* day does not balance */
 SELECT 'day does not balance' AS description,
