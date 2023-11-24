@@ -568,7 +568,7 @@ SELECT v.name,
 		0 - ROUND((
 				SUM(sl.remainingamt) OVER (PARTITION BY sl.acctid) - SUM(CASE 
 						WHEN voids.id IS NOT NULL
-							THEN 0
+							THEN ROUND(docamt * .0001, 2)
 						WHEN (docamt - sum(amtpaidthischeck)) <= 0
 							THEN 0
 						WHEN (docamt - sum(amtpaidthischeck)) != docamt
@@ -581,7 +581,7 @@ SELECT v.name,
 		0 - (
 			ROUND((sl.remainingamt * .0001), 2) - CASE 
 				WHEN voids.id IS NOT NULL
-					THEN 0
+					THEN ROUND(docamt * .0001, 2)
 				WHEN ((docamt - sum(amtpaidthischeck)) * .0001) <= 0
 					THEN 0
 				WHEN ((docamt - sum(amtpaidthischeck))) != docamt
@@ -599,7 +599,7 @@ SELECT v.name,
 	/* Correct Remaing Amount */
 	CASE 
 		WHEN voids.id IS NOT NULL
-			THEN 0
+			THEN ROUND(docamt * .0001, 2)
 		WHEN ((docamt - sum(amtpaidthischeck)) * .0001) <= 0
 			THEN 0
 		WHEN ((docamt - sum(amtpaidthischeck))) != docamt
