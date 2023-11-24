@@ -91,6 +91,59 @@ WHERE journaltypeid IS NULL
 ORDER BY DATE DESC;
 
 /*glhistory entries have an invalid ids or idluids*/-- output 15
+
+SELECT h.glhistoryid,
+	CASE 
+		WHEN length(h.description) > 23
+			THEN left(h.description, 25) || '....'
+		ELSE h.description
+		END AS description,
+	h.journalentryid,
+	h.DATE,
+	h.amtdebit,
+	h.amtcredit,
+	coa.acctdept,
+	CASE 
+		WHEN h.accountingid != coa.accountingid
+			THEN 'accountingid incorrect, '
+		ELSE ''
+		END || CASE 
+		WHEN h.accountingidluid != coa.accountingidluid
+			THEN 'accountingidluid incorrect, '
+		ELSE ''
+		END || CASE 
+		WHEN NOT (h.locationid = ANY (sm.storeids))
+			THEN 'locationid incorrect, '
+		ELSE ''
+		END || CASE 
+		WHEN NOT (h.locationidluid = ANY (sm.storeidluids))
+			THEN 'locationidluid incorrect, '
+		ELSE ''
+		END AS bad_ids,
+	array[h.accountingid, h.accountingidluid, h.locationid, h.locationidluid] AS acctgidsandlocationid
+--	sm.storeids AS possiblestoreids,
+--	sm.storeidluids AS possiblestoreidluids
+FROM glhistory h
+INNER JOIN glchartofaccounts coa ON coa.acctdeptid = h.acctdeptid
+INNER JOIN (
+	SELECT string_agg(s.storename, ', ') AS stores,
+		array_agg(s.storeid) AS storeids,
+		array_agg(s.storeidluid) AS storeidluids,
+		parentstoreid
+	FROM costoremap sm
+	INNER JOIN costore s ON s.storeid = sm.childstoreid
+	GROUP BY parentstoreid
+	) sm ON sm.parentstoreid = coa.accountingid
+WHERE (
+		h.accountingidluid != coa.accountingidluid
+		OR h.accountingid != coa.accountingid
+		OR NOT (h.locationidluid = ANY (sm.storeidluids))
+		OR NOT (h.locationid = ANY (sm.storeids))
+		)
+ORDER BY h.DATE DESC;
+
+-- old one commented out while testing new above sql
+/*
 SELECT h.glhistoryid,
 	CASE 
 		WHEN length(h.description) > 23
@@ -128,6 +181,7 @@ WHERE (
 		OR h.locationidluid != sm.childstoreidluid
 		OR h.locationid != sm.childstoreid
 		);
+*/
 
 /*Multiple Entries in GL Balance for 1 Acctdeptid*/
 SELECT 'duplicate glbalance entry for acctdeptid ' || b.acctdeptid AS description,
