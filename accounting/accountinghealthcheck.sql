@@ -18,18 +18,42 @@ GROUP BY xr.acctdeptid,
 HAVING COUNT(xr.acctdeptid) > 1;
 
 --
--- Less than 2 consolidations for P&L Accounts
-SELECT 'Account code ' || coa.acctdept || ' is a detail account, consolidated to less than one account' AS description,
-	'(# of Consolidation): ' || COUNT(xr.acctdeptid) AS consolidation_count,
-	xr.acctdeptid AS cons_acctdeptid
-FROM glconsxref xr
-LEFT JOIN glchartofaccounts coa ON coa.acctdeptid = xr.acctdeptid
-WHERE coa.accttype IN (3, 4, 6)
-	AND consind = 0
-GROUP BY xr.acctdeptid,
-	coa.acctdeptid
-HAVING COUNT(xr.acctdeptid) < 2
-ORDER BY COUNT(xr.acctdeptid) DESC;
+-- Too many or few consolidations compared to the avg for the department rounded to the nearest whole number
+WITH conscounts
+AS (
+	SELECT count(xr.acctdeptid) AS conscount,
+		coa.acctdept,
+		coa.deptid
+	FROM glconsxref xr
+	LEFT JOIN glchartofaccounts coa ON coa.acctdeptid = xr.acctdeptid
+	WHERE coa.accttype IN (3, 4, 6)
+	GROUP BY coa.acctdeptid,
+		coa.acctdept,
+		coa.deptid
+	),
+deptavg
+AS (
+	SELECT ROUND(avg(c.conscount), 0) AS avgcount,
+		c.deptid,
+		d.deptcode
+	FROM conscounts c
+	INNER JOIN gldepartment d ON d.departmentsid = c.deptid
+	GROUP BY c.deptid,
+		d.deptcode
+	)
+SELECT 'Account # ' || cc.acctdept || ' has irregular # of consolidations for its department' AS description,
+	CASE 
+		WHEN cc.conscount = 0
+			THEN 'Account has no consolidations'
+		WHEN da.avgcount - cc.conscount < 0
+			THEN 'Account has ' || ABS(da.avgcount - cc.conscount) || ' too many consolidation(s)'
+		ELSE 'Account has ' || da.avgcount - cc.conscount || ' too few consolidation(s)'
+		END AS tofix,
+	'(# of Consolidations): ' || cc.conscount || ' , (Dept Average): ' || da.avgcount AS consolidation_count
+FROM conscounts cc
+INNER JOIN deptavg da ON da.deptid = cc.deptid
+WHERE cc.conscount != da.avgcount
+ORDER BY da.avgcount - cc.conscount DESC;
 
 --
 -- Level greater than 9 on account (Causes COA to be unable to calculate. Numbers greater than 9 can be used but it's not advised) 
