@@ -57,13 +57,21 @@ ORDER BY da.avgcount - cc.conscount DESC;
 
 --
 -- Level greater than 9 on account (Causes COA to be unable to calculate. Numbers greater than 9 can be used but it's not advised) 
-SELECT coa.acctdeptid,
+SELECT 'Account # ' || coa.acctdept || ' has a level greater than 9' as description, 
+	coa.acctdeptid,
 	coa.acctdept,
 	coa.totallevel,
 	coa.sequencenumber
 FROM glchartofaccounts coa
 WHERE abs(totallevel) > 9;
-
+--
+-- Account Code used multiple times, could break recalc
+SELECT 'Account # ' || acctdept || ' is used ' || count(coa.acctdept) || ' times, and could cause issues recalculating'
+FROM glchartofaccounts coa
+GROUP BY coa.acctdept,
+	coa.accountingid
+HAVING count(coa.acctdept) != 1;
+--
 /* DEFECTS AND PRODUCT CRs */
 -- glconsxref entry mapped to invalid GL Account
 SELECT 'glconsxref entry mapped to invalid GL Account OR invalid accountingid' AS description,
@@ -110,14 +118,15 @@ ORDER BY det.acctdeptid,
 	cons.acctdeptid;
 
 -- glhistory entries with invalid jtypeid within last 4 years / needs modification
-SELECT *
+SELECT 'glhistory entries with invalid jtypeid' AS description,
+	*
 FROM glhistory
 LEFT JOIN gljournaltype jt ON journaltypeid = jtypeid
 WHERE journaltypeid IS NULL
 	AND postingdate > '2018-01-01'
-ORDER BY DATE DESC;
+ORDER BY DATE DESC LIMIT 100;
 
--- glhistory entries have an invalid ids or idluids 
+-- glhistory entries have an invalid ids or idluids // works with shared accounting
 SELECT h.glhistoryid,
 	CASE 
 		WHEN length(h.description) > 23
@@ -147,8 +156,6 @@ SELECT h.glhistoryid,
 		ELSE ''
 		END AS bad_ids,
 	array [h.accountingid, h.accountingidluid, h.locationid, h.locationidluid] AS acctgidsandlocationid
---	sm.storeids AS possiblestoreids,
---	sm.storeidluids AS possiblestoreidluids
 FROM glhistory h
 INNER JOIN glchartofaccounts coa ON coa.acctdeptid = h.acctdeptid
 INNER JOIN (
@@ -168,7 +175,7 @@ WHERE (
 		)
 ORDER BY h.DATE DESC;
 
--- Multiple Entries in GL Balance for 1 Acctdeptid
+-- Multiple Entries in GL Balance for 1 Acctdeptid and Fiscal Year
 SELECT 'duplicate glbalance entry for acctdeptid ' || b.acctdeptid AS description,
 	coa.acctdept,
 	b.fiscalyear,
@@ -182,7 +189,7 @@ GROUP BY coa.acctdept,
 HAVING count(b.fiscalyear) > 1;
 
 -- glbalance entries with a storeid not valid with costoremap
-SELECT 'gl balance entry with invalid store, check output 4 as potential cause' AS description,
+SELECT 'gl balance entry with invalid store, check output 4 as potential cause' AS description, -- might be diff output now
 	glbalancesid,
 	coa.acctdept,
 	b.fiscalyear
@@ -193,7 +200,7 @@ INNER JOIN glchartofaccounts coa ON coa.acctdeptid = b.acctdeptid
 WHERE sm.childstoreid IS NULL;
 
 -- acctdeptid in glhistory not in glchartofaccounts
-SELECT 'acctdeptid in glhistory not in glchartofaccounts' AS description,
+SELECT 'acctdeptid in glhistory but not in glchartofaccounts' AS description,
 	hist.glhistoryid,
 	hist.acctdeptid,
 	hist.accountingid,
