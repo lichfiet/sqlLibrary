@@ -7,17 +7,6 @@
 --
 /* SETUP ISSUES */
 --
--- Detail Account Consolidating to More than 1 Consolidated Account
-SELECT 'Account code ' || coa.acctdept || ' is consolidated to more than one account' AS description,
-	'(# of Consolidation): ' || COUNT(xr.acctdeptid) AS consolidation_count,
-	xr.acctdeptid AS cons_acctdeptid
-FROM glconsxref xr
-LEFT JOIN glchartofaccounts coa ON coa.acctdeptid = xr.acctdeptid
-GROUP BY xr.acctdeptid,
-	coa.acctdeptid
-HAVING COUNT(xr.acctdeptid) > 1;
-
---
 -- Too many or few consolidations compared to the avg for the department rounded to the nearest whole number
 WITH conscounts
 AS (
@@ -369,7 +358,7 @@ SELECT 'unknown supplier' AS description,
 				su.suppliername IS NULL
 				OR su.suppliername = ''
 				)
-			THEN 'supplier ' || su.suppliercode || ' missing suppliername'
+			THEN 'supplier code: (' || su.suppliercode || ') is missing a name'
 		ELSE 'unknown error'
 		END AS issuedescription,
 	h.journalentryid AS transactionnumber,
