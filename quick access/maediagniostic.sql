@@ -689,7 +689,7 @@ SELECT maedata.documentnumber AS docnumber,
 		ELSE ''
 		END || CASE 
 		WHEN miscinvnonarmop.businessactionid IS NOT NULL
-			THEN 'EVO-33866 Scheduled Not Valid for A/R Customerid XXXXX Misc Receipt | T1 Preapproved'
+			THEN 'EVO-33866 Scheduled Not Valid for A/R Customerid XXXXX Misc Receipt | T2'
 		ELSE ''
 		END || CASE 
 		WHEN dealarglaccount.businessactionid IS NOT NULL
