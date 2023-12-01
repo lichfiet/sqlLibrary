@@ -610,23 +610,23 @@ AS (
 	),
 oobmissingmoppartinvoice
 AS (
-	SELECT count(pi.partinvoiceid) OVER (PARTITION BY pi.partinvoiceid) AS paymentcount,
-		ba.businessactionid
+	SELECT ba.businessactionid
 	FROM papartinvoice pi
 	INNER JOIN mabusinessaction ba ON ba.documentid = pi.partinvoiceid
 	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
 	INNER JOIN cocommoninvoice ci ON ci.commoninvoiceid = pi.commoninvoiceid
 	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
 	INNER JOIN (
-		SELECT sum(debitamt) - sum(creditamt) AS oobamt,
+		SELECT (sum(debitamt - creditamt) * - 1) AS oobamt,
 			businessactionid
 		FROM mabusinessactionitem
 		GROUP BY businessactionid
 		) sums ON sums.businessactionid = ba.businessactionid
 	WHERE ba.STATUS = 2
 		AND pi.invoicetype NOT IN (2, 3)
-		AND ABS(sums.oobamt) = pit.invoicesubtotal
-		AND cip.amount = 0
+		AND sums.oobamt = pit.soldnowsubtotal
+	GROUP BY ba.businessactionid
+	HAVING sum(cip.amount) = 0
 	),
 oobwrongmopamountrepairorder
 AS (
@@ -870,7 +870,6 @@ LEFT JOIN oobdupepartinvoice ON oobdupepartinvoice.businessactionid = ba.busines
 LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid -- EVO-20828
 LEFT JOIN taxoobpartinvoice ON taxoobpartinvoice.businessactionid = ba.businessactionid -- EVO-17198 taxes oob compared to tax entity amounts
 LEFT JOIN oobmissingmoppartinvoice ON oobmissingmoppartinvoice.businessactionid = ba.businessactionid
-	AND paymentcount = 1
 LEFT JOIN armopinternalinvoice ON armopinternalinvoice.businessactionid = ba.businessactionid -- EVO-31066
 LEFT JOIN oobwrongmopamountrepairorder ON oobwrongmopamountrepairorder.businessactionid = ba.businessactionid -- EVO-30796 Mop Amount less than Amount to Collect on RO
 LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.businessactionid -- EVO-31125
