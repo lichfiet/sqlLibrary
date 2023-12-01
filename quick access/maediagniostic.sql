@@ -572,12 +572,37 @@ AS (
 				) soamt ON soamt.partinvoiceid = pi.partinvoiceid
 				AND pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
 			) soa ON soa.partinvoiceid = pi.partinvoiceid
+		INNER JOIN papartinvoice pin on pi.partinvoiceid = pin.partinvoiceid
+		INNER JOIN cosaletype st ON st.saletypeid = pin.handlingsaletypeid
 		WHERE ba.documenttype = 1001
 			AND ba.STATUS = 2
 			AND dep.applied <> oob.oob
+			AND CASE 
+				WHEN st.usagecode = 7
+					AND pin.invoicehandlingamt + pin.specialorderhandling != 0
+					THEN 0
+				ELSE 1
+				END = 1
 		GROUP BY ba.businessactionid
 		) data
 	GROUP BY businessactionid
+	),
+oobnonpaypartinvoice
+AS (
+	SELECT ba.businessactionid
+	FROM papartinvoice pi
+	INNER JOIN cosaletype st ON st.saletypeid = pi.handlingsaletypeid
+		AND st.usagecode = 7
+	INNER JOIN mabusinessaction ba ON ba.documentid = pi.partinvoiceid
+	INNER JOIN (
+		SELECT bai.businessactionid,
+			sum(debitamt - creditamt) AS oobamt
+		FROM mabusinessactionitem bai
+		GROUP BY bai.businessactionid
+		) oob ON oob.businessactionid = ba.businessactionid
+	WHERE ba.STATUS = 2
+		AND pi.invoicehandlingamt + specialorderhandling != 0
+		AND pi.invoicehandlingamt + specialorderhandling = oob.oobamt
 	),
 taxoobpartinvoice -- https://lightspeeddms.atlassian.net/browse/EVO-17198
 AS (
@@ -807,6 +832,10 @@ SELECT maedata.documentnumber AS docnumber,
 			THEN 'EVO-20828 Part Invoice OOB Missing Discounts on Lines | T2'
 		ELSE ''
 		END || CASE 
+		WHEN oobnonpaypartinvoice.businessactionid IS NOT NULL -- Semi-verified
+			THEN 'EVO-39247 Part Invoice OOB Non-Pay Handling Amt | T2'
+		ELSE ''
+		END || CASE 
 		WHEN armopinternalinvoice.businessactionid IS NOT NULL
 			THEN 'EVO-31066 Internal Invoice Using AR MOP | T1 Preapproved'
 		ELSE ''
@@ -868,6 +897,7 @@ LEFT JOIN dealunitid1 ON dealunitid1.businessactionid = ba.businessactionid -- E
 LEFT JOIN dealoobins ON dealoobins.businessactionid = ba.businessactionid -- EVO-24051
 LEFT JOIN oobdupepartinvoice ON oobdupepartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid -- EVO-20828
+LEFT JOIN oobnonpaypartinvoice ON oobnonpaypartinvoice.businessactionid = ba.businessactionid -- EVO-39247
 LEFT JOIN taxoobpartinvoice ON taxoobpartinvoice.businessactionid = ba.businessactionid -- EVO-17198 taxes oob compared to tax entity amounts
 LEFT JOIN oobmissingmoppartinvoice ON oobmissingmoppartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN armopinternalinvoice ON armopinternalinvoice.businessactionid = ba.businessactionid -- EVO-31066
