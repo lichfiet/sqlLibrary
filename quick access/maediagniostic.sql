@@ -642,6 +642,39 @@ AS (
 		ba.businessactionid
 	HAVING sum(cip.amount) != rt.rototalnw
 	),
+dealoobins
+AS (
+	SELECT ba.businessactionid
+	FROM sadealfinalization df
+	INNER JOIN sadeal d ON d.dealid = df.dealid
+	INNER JOIN mabusinessaction ba ON ba.documentid = df.dealfinalizationid
+	INNER JOIN (
+		SELECT dealid,
+			sum(price) AS insprice
+		FROM sadealinsurancetype
+		WHERE price != 0
+		GROUP BY dealid
+		) di ON di.dealid = d.dealid
+	INNER JOIN cocommoninvoice ci ON ci.invoicenumber::VARCHAR = ba.invoicenumber
+		AND ci.storeid = ba.storeid
+	INNER JOIN (
+		SELECT commoninvoiceid,
+			sum(amount) * - 1 AS amts,
+			count(commoninvoiceid) AS pymts,
+			array_agg(commoninvoicepaymentid) AS cipids
+		FROM cocommoninvoicepayment
+		GROUP BY commoninvoiceid
+		) cip ON cip.commoninvoiceid = ci.commoninvoiceid
+	INNER JOIN (
+		SELECT businessactionid,
+			sum(debitamt - creditamt) * - 1 AS oob
+		FROM mabusinessactionitem
+		GROUP BY businessactionid
+		) oob ON oob.businessactionid = ba.businessactionid
+	WHERE ba.STATUS = 2
+		AND (amts + oob.oob) / 2 = di.insprice
+		AND ((amts + oob.oob) * - 1) / 2 = d.balancetofinance
+	),
 oobwrongamtsalesdeal
 AS (
 	SELECT b.businessactionid
@@ -677,7 +710,7 @@ SELECT maedata.documentnumber AS docnumber,
 	maedata.doctype AS documenttype,
 	maedata.errorstatus AS STATUS,
 	maedata.docdate AS DATE,
-	s.storename || ', Id:' || s.storeid::varchar AS storeandstoreid,
+	s.storename || ', Id:' || s.storeid::VARCHAR AS storeandstoreid,
 	ba.documentid,
 	CASE 
 		WHEN missingmae.businessactionid IS NOT NULL
@@ -790,6 +823,10 @@ SELECT maedata.documentnumber AS docnumber,
 			THEN 'EVO-30796 Repair Order OOB Method of Payment Amount Incorrect | T1 Preapproved'
 		ELSE ''
 		END || CASE 
+		WHEN dealoobins.businessactionid IS NOT NULL -- VERIFIED
+			THEN 'EVO-24051 Deal OOB insurance Forces Negative Balance to Finance | T2'
+		ELSE ''
+		END || CASE 
 		WHEN oobwrongamtsalesdeal.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
 			THEN 'EVO-31125 Sales Deal OOB Method of Payment != Balance to Finance | T1 Preapproved'
 		ELSE ''
@@ -828,6 +865,7 @@ LEFT JOIN taxiddeal2 ON taxiddeal2.businessactionid = ba.businessactionid -- EVO
 LEFT JOIN taxidpartinvoice1 ON taxidpartinvoice1.businessactionid = ba.businessactionid -- EVO-35995 
 LEFT JOIN tradedealid ON tradedealid.businessactionid = ba.businessactionid -- EVO-22520 Deal Trade MAE with invalid tradedealid
 LEFT JOIN dealunitid1 ON dealunitid1.businessactionid = ba.businessactionid -- EVO-21635 Deal Unit ID linking to invalid dealunit
+LEFT JOIN dealoobins ON dealoobins.businessactionid = ba.businessactionid -- EVO-24051
 LEFT JOIN oobdupepartinvoice ON oobdupepartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid -- EVO-20828
 LEFT JOIN taxoobpartinvoice ON taxoobpartinvoice.businessactionid = ba.businessactionid -- EVO-17198 taxes oob compared to tax entity amounts
