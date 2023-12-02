@@ -89,7 +89,7 @@ AS (
 	FROM mabusinessaction ba
 	LEFT JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid
 	LEFT JOIN mabusinessactionerror bae ON bae.businessactionid = ba.businessactionid
-	WHERE ba.STATUS = 2
+	WHERE ba.STATUS IN (2, 4)
 	GROUP BY ba.businessactionid,
 		documentnumber,
 		STATUS,
@@ -110,25 +110,8 @@ AS (
 	INNER JOIN mabusinessactionitem mai using (businessactionid)
 	INNER JOIN cocommoninvoice ci ON ci.invoicenumber::TEXT = ma.invoicenumber::TEXT
 	INNER JOIN cocommoninvoicepayment cip using (commoninvoiceid)
-	INNER JOIN (
-		SELECT CASE 
-				WHEN depositoption = 0
-					THEN bank_val
-				WHEN depositoption IN (1, 2)
-					THEN mop1.glacct
-				END AS mop_gl,
-			methodofpaymentid,
-			mop1.storeid
-		FROM comethodofpayment mop1
-		INNER JOIN (
-			SELECT value::BIGINT AS bank_val,
-				storeid
-			FROM copreference
-			WHERE id = 'shop-DefaultBankAcct'
-			) pref ON pref.storeid = mop1.storeid
-		) mop ON mop.methodofpaymentid = cip.methodofpaymentid
-		AND mop.storeid = ma.storeid
-	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = mop.mop_gl
+	INNER JOIN comethodofpayment mop ON mop.methodofpaymentid = cip.methodofpaymentid
+	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = mop.glacct
 	WHERE STATUS = 2
 		AND coa.schedule = 0
 		AND cip.arcustomerid <> 0
@@ -245,8 +228,8 @@ AS (
 	FROM serepairorder ro
 	INNER JOIN cosaletype st ON st.saletypeid = ro.miscitemsaletypeid
 		AND ro.storeid != st.storeid
-	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
-	WHERE ba.STATUS = 2
+	INNER JOIN mabusinessaction ba ON ba.STATUS = 2
+		AND ba.documentid = ro.repairorderid
 	GROUP BY ba.businessactionid
 	),
 erroraccpicat
@@ -453,15 +436,9 @@ AS (
 	FROM sadealadjustmenttax dat
 	INNER JOIN sadealadjustment da ON da.dealadjustmentid = dat.dealadjustmentid
 	INNER JOIN mabusinessaction ba ON ba.documentid = da.dealadjustmentid
-	INNER JOIN (
-		SELECT ba.businessactionid,
-			STRING_AGG(errortext, ', ') AS TEXT
-		FROM mabusinessactionerror bae
-		INNER JOIN mabusinessaction ba ON ba.businessactionid = bae.businessactionid
-		GROUP BY ba.businessactionid
-		) errortext ON errortext.businessactionid = ba.businessactionid
+	INNER JOIN maedata errortext ON errortext.businessactionid = ba.businessactionid
 	WHERE ba.STATUS = 2
-		AND errortext.TEXT ilike '%Tax Entity not rounded%'
+		AND errortext.txt ilike '%Tax Entity not rounded%'
 		AND ROUND(taxamt, - 2) != taxamt
 	GROUP BY ba.businessactionid
 	
@@ -472,16 +449,10 @@ AS (
 	INNER JOIN rerentalpostingtax rpt ON rpt.rentalpostingtaxid = rptd.rentalpostingtaxid
 	INNER JOIN rerentalposting rp ON rp.rentalpostingid = rpt.rentalpostingid
 	INNER JOIN mabusinessaction ba ON ba.documentid = rp.rentalpostingid
-	INNER JOIN (
-		SELECT ba.businessactionid,
-			STRING_AGG(errortext, ', ') AS TEXT
-		FROM mabusinessactionerror bae
-		INNER JOIN mabusinessaction ba ON ba.businessactionid = bae.businessactionid
-		GROUP BY ba.businessactionid
-		) errortext ON errortext.businessactionid = ba.businessactionid
+	INNER JOIN maedata errortext ON errortext.businessactionid = ba.businessactionid
 	WHERE ROUND(rptd.taxamount, - 2) != rptd.taxamount
 		AND ba.STATUS = 2
-		AND errortext.TEXT ilike '%Tax Entity not rounded%'
+		AND errortext.txt ilike '%Tax Entity not rounded%'
 	GROUP BY ba.businessactionid
 	),
 dealunitid1 -- https://lightspeeddms.atlassian.net/browse/EVO-21635
@@ -572,7 +543,7 @@ AS (
 				) soamt ON soamt.partinvoiceid = pi.partinvoiceid
 				AND pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
 			) soa ON soa.partinvoiceid = pi.partinvoiceid
-		INNER JOIN papartinvoice pin on pi.partinvoiceid = pin.partinvoiceid
+		INNER JOIN papartinvoice pin ON pi.partinvoiceid = pin.partinvoiceid
 		INNER JOIN cosaletype st ON st.saletypeid = pin.handlingsaletypeid
 		WHERE ba.documenttype = 1001
 			AND ba.STATUS = 2
