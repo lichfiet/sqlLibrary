@@ -297,6 +297,33 @@ AS (
 	WHERE coa.schedule != 0
 		AND ba.STATUS = 2
 	GROUP BY ba.businessactionid
+	
+	UNION
+	
+	SELECT ba.businessactionid
+	FROM serepairorderpart rop
+	INNER JOIN serepairorderjob roj ON roj.repairorderjobid = rop.repairorderjobid
+	INNER JOIN serepairorderunit rou ON rou.repairorderunitid = roj.repairorderunitid
+	INNER JOIN serepairorder ro ON ro.repairorderid = rou.repairorderid
+	INNER JOIN cocategory c ON c.categoryid = rop.categoryid
+	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = c.glinventory
+	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
+	WHERE coa.schedule != 0
+		AND ba.STATUS = 2
+	GROUP BY ba.businessactionid
+	),
+subletcloseoutscheduledmu
+AS (
+	SELECT ba.businessactionid
+	FROM sesubletcloseout sc
+	INNER JOIN serepairordersublet rs ON rs.repairordersubletid = sc.subletlaborid
+	INNER JOIN serepairorderjob roj ON roj.repairorderjobid = rs.repairorderjobid
+	INNER JOIN cocategory c ON c.categoryid = sc.categoryid
+	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = c.glinventory
+	INNER JOIN mabusinessaction ba ON ba.documentid = sc.subletcloseoutid
+	WHERE coa.schedule != 0
+		AND ba.STATUS = 2
+	GROUP BY ba.businessactionid
 	),
 analysispending -- verified to work at least once 
 AS (
@@ -749,6 +776,10 @@ SELECT maedata.documentnumber AS docnumber,
 			THEN 'EVO-14901 Part Category Has MU Scheduled Inventory Account | T2'
 		ELSE ''
 		END || CASE 
+		WHEN subletcloseoutscheduledmu.businessactionid IS NOT NULL
+			THEN 'EVO-13300 Sublet Category Has MU Scheduled Inventory Account | T2'
+		ELSE ''
+		END || CASE 
 		WHEN analysispending.businessactionid IS NOT NULL -- Analysis Pending On Part Receiving Document
 			THEN 'EVO-29301 Analysis Pending on Part Receiving Document | T1 Preapproved'
 		ELSE ''
@@ -850,6 +881,7 @@ LEFT JOIN erroraccpicat eapicat ON eapicat.businessactionid = ba.businessactioni
 LEFT JOIN erroraccreceivepart earpcat ON earpcat.businessactionid = ba.businessactionid -- EVO-31748 Part Receiving Doc with Bad Categoryid
 LEFT JOIN erroraccmiscsaletype ON erroraccmiscsaletype.businessactionid = ba.businessactionid -- EVO-39691 RO with bad misc item categoryid
 LEFT JOIN partinvoicescheduledmu ON partinvoicescheduledmu.businessactionid = ba.businessactionid -- EVO-14901 Part on Invoice with MU Category
+LEFT JOIN subletcloseoutscheduledmu ON subletcloseoutscheduledmu.businessactionid = ba.businessactionid
 LEFT JOIN missingmae ON missingmae.businessactionid = ba.businessactionid
 LEFT JOIN analysispending ON analysispending.businessactionid = ba.businessactionid
 LEFT JOIN invalidglnonpayro ON invalidglnonpayro.businessactionid = ba.businessactionid
