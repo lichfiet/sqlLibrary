@@ -91,24 +91,35 @@ FROM (
 		/* Correct Remaing Amount */
 		CASE 
 			WHEN voids.id IS NOT NULL
+				AND docamt != 0
 				THEN docamt
 			WHEN (docamt - sum(amtpaidthischeck)) <= 0
+				AND docamt != 0
 				THEN 0
 			WHEN (docamt - sum(amtpaidthischeck)) != docamt
+				AND docamt != 0
 				THEN (docamt - sum(amtpaidthischeck))
+			WHEN docamt = 0
+				THEN 0
 			ELSE 0
 			END AS corr_remain,
 		/* */
 		/* SLTRX State */
 		CASE 
-			WHEN voids.id IS NOT NULL -- if part of the voided checks list
+			WHEN voids.id IS NOT NULL
+				AND docamt != 0 -- if part of the voided checks list
 				THEN 1
-			WHEN ((docamt - sum(amtpaidthischeck))) <= 0 -- If the sum of payments <= 0
+			WHEN ((docamt - sum(amtpaidthischeck))) <= 0
+				AND docamt != 0 -- If the sum of payments <= 0
 				THEN 4 --FULLY PAID
-			WHEN ((docamt - sum(amtpaidthischeck))) != docamt -- If the sum of payments = part of the invoice amt
+			WHEN ((docamt - sum(amtpaidthischeck))) != docamt
+				AND docamt != 0 -- If the sum of payments = part of the invoice amt
 				THEN 2 -- PARTIALLY PAID
-			WHEN ((docamt - sum(amtpaidthischeck))) = docamt --- IF the sum of check payments = 0
+			WHEN ((docamt - sum(amtpaidthischeck))) = docamt
+				AND docamt != 0 --- IF the sum of check payments = 0
 				THEN 1 -- UNPAID
+			WHEN docamt = 0 -- invoiceamt = 0
+				THEN 4
 			ELSE 0 -- Panic if you get a zero
 			END AS newstate,
 		/* */
@@ -148,7 +159,7 @@ FROM (
 				)
 			OR voids.id IS NOT NULL
 			)
-	--	AND v.vendornumber = 4381458 
+		AND v.vendornumber = 398573
 	GROUP BY apinvoiceid,
 		sl.documentnumber,
 		sl.description,
