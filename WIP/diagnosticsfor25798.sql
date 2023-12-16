@@ -14,7 +14,7 @@
 --  3) Store and Accounting Comparison vs glsl, coa, and glhist
 --  4) aptopayinv items linking to bad glsl data
 -- 
-/* Invoices Paid/Partially Paid/Not Paid when they shouldn't be */
+/* Invoices Paid || Partially Paid || Not Paid when they shouldn't be */
 --
 -- This SQL diagnoses some of the issues noted in EVO-25798
 -- that have to do with the remaining amounts being incorrect on
