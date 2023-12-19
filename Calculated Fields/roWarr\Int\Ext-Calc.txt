@@ -1,0 +1,16 @@
+If $f{RO Totals-Non-Warranty Total Before Tax} - $f{RO Totals-Major Unit Total Before Tax} = $f{RO Totals-Non-Warranty Total Before Tax}
+AND $f{RO Totals-Warranty Total Before Tax} = 0
+THEN "Customer Pay"
+ELSE IF $f{RO Totals-Non-Warranty Total Before Tax}  = 0 AND $f{RO Totals-Major Unit Total Before Tax} <> 0
+AND $f{RO Totals-Warranty Total Before Tax} = 0
+THEN "Internal"
+ELSE IF $f{RO Totals-Warranty Total Before Tax} <> 0
+AND $f{RO Totals-Non-Warranty Total Before Tax} = 0
+THEN "Warranty"
+ELSE IF $f{RO Totals-Warranty Total Before Tax} <> 0 AND $f{RO Totals-Non-Warranty Total Before Tax} <> 0
+THEN "Internal / Customer Pay"
+ELSE "Customer Pay / Warranty"
+END
+END
+END
+END
