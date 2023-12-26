@@ -648,6 +648,29 @@ AS (
 	WHERE ba.STATUS = 2
 		AND pi.invoicetype NOT IN (2, 3)
 		AND sums.oobamt = pit.soldnowsubtotal
+		AND cip.description = ''
+	GROUP BY ba.businessactionid
+	HAVING sum(cip.amount) = 0
+	),
+oobzerosummoppartinvoice
+AS (
+	-- EVO-31037
+	SELECT ba.businessactionid
+	FROM papartinvoice pi
+	INNER JOIN mabusinessaction ba ON ba.documentid = pi.partinvoiceid
+	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
+	INNER JOIN cocommoninvoice ci ON ci.commoninvoiceid = pi.commoninvoiceid
+	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
+	INNER JOIN (
+		SELECT (sum(debitamt - creditamt) * - 1) AS oobamt,
+			businessactionid
+		FROM mabusinessactionitem
+		GROUP BY businessactionid
+		) sums ON sums.businessactionid = ba.businessactionid
+	WHERE ba.STATUS = 2
+		AND pi.invoicetype NOT IN (2, 3)
+		AND sums.oobamt = pit.soldnowsubtotal
+		AND cip.description != ''
 	GROUP BY ba.businessactionid
 	HAVING sum(cip.amount) = 0
 	),
@@ -838,6 +861,10 @@ SELECT maedata.documentnumber AS docnumber,
 			THEN 'EVO-39247 Part Invoice OOB Non-Pay Handling Amt | T2'
 		ELSE ''
 		END || CASE 
+		WHEN oobzerosummoppartinvoice.businessactionid IS NOT NULL
+			THEN 'EVO-31037 Part Invoice Payment Refunded invoice amount | T2'
+		ELSE ''
+		END || CASE 
 		WHEN armopinternalinvoice.businessactionid IS NOT NULL
 			THEN 'EVO-31066 Internal Invoice Using AR MOP | T1 Preapproved'
 		ELSE ''
@@ -903,6 +930,7 @@ LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.busines
 LEFT JOIN oobnonpaypartinvoice ON oobnonpaypartinvoice.businessactionid = ba.businessactionid -- EVO-39247
 LEFT JOIN taxoobpartinvoice ON taxoobpartinvoice.businessactionid = ba.businessactionid -- EVO-17198 taxes oob compared to tax entity amounts
 LEFT JOIN oobmissingmoppartinvoice ON oobmissingmoppartinvoice.businessactionid = ba.businessactionid
+LEFT JOIN oobzerosummoppartinvoice ON oobzerosummoppartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN armopinternalinvoice ON armopinternalinvoice.businessactionid = ba.businessactionid -- EVO-31066
 LEFT JOIN oobwrongmopamountrepairorder ON oobwrongmopamountrepairorder.businessactionid = ba.businessactionid -- EVO-30796 Mop Amount less than Amount to Collect on RO
 LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.businessactionid -- EVO-31125
