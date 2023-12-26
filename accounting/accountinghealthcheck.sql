@@ -410,17 +410,27 @@ SELECT 'Vendor Invalid on AP Rec' AS description,
 		WHEN SUM(amtdebit - amtcredit) = 0
 			THEN 'Not on AP Rec'
 		ELSE 'On AP Rec'
-		END AS recstatus
+		END AS recstatus,
+	CASE 
+		WHEN sum(h.scheddoctypeid) / count(glhistoryid) != 2
+			THEN 'Missing Sched Doc Type ID from 1 or more entries'
+		ELSE ''
+		END AS scheddoctype
 FROM glhistory h
 INNER JOIN glchartofaccounts coa using (acctdeptid)
 LEFT JOIN apvendor v ON v.vendorid::TEXT = h.schedacctid
-INNER JOIN costore s ON h.locationid = s.storeid
-WHERE h.scheddoctypeid = 2
+LEFT JOIN costore s ON h.locationid = s.storeid
+WHERE coa.schedule = 2
 	AND h.isconverted = false
-	AND v.vendorid IS NULL
+	AND (
+		v.vendorid IS NULL
+		OR h.schedacctid = ''
+		)
 GROUP BY h.schedacctid,
 	coa.acctdept,
-	s.storename
+	s.storename,
+	h.accountingid
 ORDER BY SUM(amtdebit - amtcredit) DESC,
 	acctdept ASC;
-	/* AR Rec Cut invalid will go here */
+
+/* AR Rec Customer invalid will go here */
