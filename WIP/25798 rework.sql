@@ -159,7 +159,7 @@ FROM (
 				)
 			OR voids.id IS NOT NULL
 			)
-		AND v.vendornumber = 398573
+		AND v.vendornumber = 528066
 	GROUP BY apinvoiceid,
 		sl.documentnumber,
 		sl.description,
@@ -170,6 +170,25 @@ FROM (
 		v.name
 	HAVING sum(amtpaidthischeck) != (docamt - remainingamt)
 		OR voids.id IS NOT NULL
+		OR sl.sltrxstate != (
+			CASE 
+				WHEN voids.id IS NOT NULL
+					AND docamt != 0 -- if part of the voided checks list
+					THEN 1
+				WHEN ((docamt - sum(amtpaidthischeck))) <= 0
+					AND docamt != 0 -- If the sum of payments <= 0
+					THEN 4 --FULLY PAID
+				WHEN ((docamt - sum(amtpaidthischeck))) != docamt
+					AND docamt != 0 -- If the sum of payments = part of the invoice amt
+					THEN 2 -- PARTIALLY PAID
+				WHEN ((docamt - sum(amtpaidthischeck))) = docamt
+					AND docamt != 0 --- IF the sum of check payments = 0
+					THEN 1 -- UNPAID
+				WHEN docamt = 0 -- invoiceamt = 0
+					THEN 4
+				ELSE 0 -- Panic if you get a zero
+				END
+			)
 	) bob
 WHERE sl.sltrxid = bob.identifier;
 --
