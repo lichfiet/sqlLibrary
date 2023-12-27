@@ -174,7 +174,7 @@ HAVING sum(amtpaidthischeck) != (docamt - remainingamt)
 
 
 -- Output 2
-SELECT '$' || (ROUND(sum(docamt * .0001) OVER (PARTITION BY sl.acctid), 0))::VARCHAR AS total_invoice_adjustment,
+SELECT '$' || (ROUND(sum(docamt * .0001) OVER (PARTITION BY sl.acctid), 2))::VARCHAR AS total_invoice_adjustment,
 	v.name AS vendorname,
 	CASE 
 		WHEN badids.journalentryid IS NULL
@@ -186,7 +186,7 @@ FROM glsltransaction sl
 INNER JOIN apvendor v ON v.vendorid = sl.acctid
 LEFT JOIN apcheckinvoicelist cl ON cl.apinvoiceid = sl.sltrxid
 LEFT JOIN (
-	SELECT h.journalentryid,
+	SELECT h.journalentryid, 
 		coa.accountingid,
 		CASE 
 			WHEN h.accountingid != coa.accountingid
