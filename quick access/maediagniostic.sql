@@ -520,7 +520,6 @@ AS (
 	INNER JOIN mabusinessaction ba ON ba.documentid = h.partinvoiceid
 	WHERE il.partinvoiceid <> h.partinvoiceid
 		AND ba.STATUS = 2
-	GROUP BY ba.businessactionid
 	),
 oobmissingdiscountpartinvoice
 AS (
@@ -674,6 +673,7 @@ AS (
 		AND cip.description != ''
 	GROUP BY ba.businessactionid
 	HAVING sum(cip.amount) = 0
+		AND count(cip.commoninvoicepaymentid) > 1
 	),
 oobwrongmopamountrepairorder
 AS (
