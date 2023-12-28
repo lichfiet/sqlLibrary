@@ -85,7 +85,8 @@ AS (
 				THEN 'In Balance'
 			ELSE 'Out of Balance!'
 			END AS oob,
-		left(string_agg(errortext, ''), 70) || '...' AS txt
+		left(string_agg(errortext, ''), 70) || '...' AS txt,
+		ba.dtstamp AS TIMESTAMP
 	FROM mabusinessaction ba
 	LEFT JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid
 	LEFT JOIN mabusinessactionerror bae ON bae.businessactionid = ba.businessactionid
@@ -94,6 +95,12 @@ AS (
 		documentnumber,
 		STATUS,
 		documenttype
+	),
+partinvoicecte
+AS (
+	SELECT pi.*
+	FROM papartinvoice pi
+	INNER JOIN maedata ON pi.dtstamp >= maedata.TIMESTAMP
 	),
 missingmae
 AS (
@@ -278,7 +285,7 @@ partinvoicescheduledmu
 AS (
 	SELECT ba.businessactionid
 	FROM papartinvoiceline pil
-	INNER JOIN papartinvoice pi ON pi.partinvoiceid = pil.partinvoiceid
+	INNER JOIN partinvoicecte pi ON pi.partinvoiceid = pil.partinvoiceid
 	INNER JOIN cocategory c ON c.categoryid = pil.categoryid
 	INNER JOIN mabusinessaction ba ON ba.documentid = pil.partinvoiceid
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = c.glinventory
@@ -359,7 +366,7 @@ AS (
 	SELECT b.businessactionid
 	FROM mabusinessaction b
 	LEFT JOIN sadealfinalization df ON df.dealfinalizationid = b.documentid
-	LEFT JOIN papartinvoice p ON p.partinvoiceid = b.documentid
+	LEFT JOIN partinvoicecte p ON p.partinvoiceid = b.documentid
 		AND p.invoicetype NOT IN (2, 3)
 	INNER JOIN cocommoninvoice c ON c.documentid = df.dealid
 		OR c.documentid = p.partinvoiceid
@@ -439,7 +446,7 @@ taxidpartinvoice1
 AS (
 	SELECT ba.businessactionid
 	FROM mabusinessaction ba
-	INNER JOIN papartinvoice pi ON pi.partinvoiceid = ba.documentid
+	INNER JOIN partinvoicecte pi ON pi.partinvoiceid = ba.documentid
 	INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
 	INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
 	LEFT JOIN cotax t ON t.taxid = pite.taxentityid
@@ -514,12 +521,13 @@ oobdupepartinvoice
 AS (
 	SELECT ba.businessactionid
 	FROM paparthistory h
-	INNER JOIN papartinvoice i ON h.partinvoiceid = i.partinvoiceid
+	INNER JOIN partinvoicecte i ON h.partinvoiceid = i.partinvoiceid
 	INNER JOIN papartinvoiceline il ON h.partinvoicelineid = il.partinvoicelineid
 	LEFT JOIN paspecialorder so ON so.partinvoiceid = h.partinvoiceid
 	INNER JOIN mabusinessaction ba ON ba.documentid = h.partinvoiceid
 	WHERE il.partinvoiceid <> h.partinvoiceid
 		AND ba.STATUS = 2
+    GROUP BY ba.businessactionid
 	),
 oobmissingdiscountpartinvoice
 AS (
@@ -533,7 +541,7 @@ AS (
 		INNER JOIN mabusinessaction ba ON ba.documentid = pi.partinvoiceid
 		INNER JOIN (
 			SELECT pi.partinvoiceid
-			FROM papartinvoice pi
+			FROM partinvoicecte pi
 			INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
 			INNER JOIN (
 				SELECT SUM((qtyspecialorder * adjustmentprice) / 10000) AS amt,
@@ -560,7 +568,7 @@ AS (
 			) dep ON dep.partinvoiceid = pi.partinvoiceid
 		INNER JOIN (
 			SELECT pi.partinvoiceid
-			FROM papartinvoice pi
+			FROM partinvoicecte pi
 			INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
 			INNER JOIN (
 				SELECT sum((qtyspecialorder * adjustmentprice) / 10000) AS amt,
@@ -570,7 +578,7 @@ AS (
 				) soamt ON soamt.partinvoiceid = pi.partinvoiceid
 				AND pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
 			) soa ON soa.partinvoiceid = pi.partinvoiceid
-		INNER JOIN papartinvoice pin ON pi.partinvoiceid = pin.partinvoiceid
+		INNER JOIN partinvoicecte pin ON pi.partinvoiceid = pin.partinvoiceid
 		INNER JOIN cosaletype st ON st.saletypeid = pin.handlingsaletypeid
 		WHERE ba.documenttype = 1001
 			AND ba.STATUS = 2
@@ -588,7 +596,7 @@ AS (
 oobnonpaypartinvoice
 AS (
 	SELECT ba.businessactionid
-	FROM papartinvoice pi
+	FROM partinvoicecte pi
 	INNER JOIN cosaletype st ON st.saletypeid = pi.handlingsaletypeid
 		AND st.usagecode = 7
 	INNER JOIN mabusinessaction ba ON ba.documentid = pi.partinvoiceid
@@ -605,7 +613,7 @@ AS (
 taxoobpartinvoice -- https://lightspeeddms.atlassian.net/browse/EVO-17198
 AS (
 	SELECT ba.businessactionid
-	FROM papartinvoice pi
+	FROM partinvoicecte pi
 	INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
 	INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
 	INNER JOIN mabusinessaction ba ON ba.invoicenumber = pi.partinvoicenumber::TEXT
@@ -620,7 +628,7 @@ AS (
 	SELECT ba.businessactionid
 	FROM mabusinessaction ba
 	INNER JOIN mabusinessactionerror bae using (businessactionid)
-	INNER JOIN papartinvoice pi ON pi.partinvoiceid = ba.documentid
+	INNER JOIN partinvoicecte pi ON pi.partinvoiceid = ba.documentid
 	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = pi.commoninvoiceid
 	WHERE ba.STATUS = 2
 		AND bae.errortext ilike 'No A/R Customer for Method of Payment %'
@@ -634,7 +642,7 @@ AS (
 oobmissingmoppartinvoice
 AS (
 	SELECT ba.businessactionid
-	FROM papartinvoice pi
+	FROM partinvoicecte pi
 	INNER JOIN mabusinessaction ba ON ba.documentid = pi.partinvoiceid
 	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
 	INNER JOIN cocommoninvoice ci ON ci.commoninvoiceid = pi.commoninvoiceid
@@ -656,7 +664,7 @@ oobzerosummoppartinvoice
 AS (
 	-- EVO-31037
 	SELECT ba.businessactionid
-	FROM papartinvoice pi
+	FROM partinvoicecte pi
 	INNER JOIN mabusinessaction ba ON ba.documentid = pi.partinvoiceid
 	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
 	INNER JOIN cocommoninvoice ci ON ci.commoninvoiceid = pi.commoninvoiceid
