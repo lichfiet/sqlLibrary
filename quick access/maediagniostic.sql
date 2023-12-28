@@ -86,7 +86,15 @@ AS (
 			ELSE 'Out of Balance!'
 			END AS oob,
 		left(string_agg(errortext, ''), 70) || '...' AS txt,
-		ba.dtstamp AS TIMESTAMP
+		min(CASE 
+				WHEN ba.dtstamp < ba.documentdate
+					THEN ba.dtstamp
+				ELSE ba.documentdate
+				END) OVER (PARTITION BY 1) AS TIMESTAMP, -- OLDEST DATED MAE IN THEIR STORE
+		ba.STATUS AS rawstatus, -- STATUS
+		ba.documentid AS rawdocumentid, -- DOCUMENTID
+		ba.storeid AS storeid, -- STOREID
+		ba.invoicenumber -- INVOICE NUMBER
 	FROM mabusinessaction ba
 	LEFT JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid
 	LEFT JOIN mabusinessactionerror bae ON bae.businessactionid = ba.businessactionid
@@ -102,13 +110,43 @@ AS (
 	FROM papartinvoice pi
 	INNER JOIN maedata ON pi.dtstamp >= maedata.TIMESTAMP
 	),
+partinvoicelinecte
+AS (
+	SELECT pil.*
+	FROM papartinvoiceline pil
+	INNER JOIN maedata ON pil.dtstamp >= maedata.TIMESTAMP
+	),
+dealcte
+AS (
+	SELECT d.*
+	FROM sadeal d
+	INNER JOIN maedata ON d.dtstamp >= maedata.TIMESTAMP
+	),
+dealunitcte
+AS (
+    SELECT du.*
+    FROM sadealunit du
+    INNER JOIN maedata ON du.dtstamp >= maedata.TIMESTAMP
+),
+repairordercte
+AS (
+	SELECT ro.*
+	FROM serepairorder ro
+	INNER JOIN maedata ON ro.dtstamp > maedata.TIMESTAMP
+	),
+repairorderunitcte
+AS (
+    SELECT rou.*
+    FROM serepairorderunit rou
+    INNER JOIN maedata ON rou.dtstamp > maedata.TIMESTAMP
+),
 missingmae
 AS (
-	SELECT businessactionid
-	FROM mabusinessaction
+	SELECT ba.businessactionid
+	FROM maedata ba
 	WHERE storeid = 0
-		AND documentid = 0
-		AND STATUS = 2
+		AND rawdocumentid = 0
+		AND rawSTATUS = 2
 	),
 schedacctnotvalidar
 AS (
@@ -128,14 +166,14 @@ AS (
 miscinvnonarmop
 AS (
 	SELECT ma.businessactionid
-	FROM mabusinessaction ma
+	FROM maedata ma
 	INNER JOIN mabusinessactionitem mai using (businessactionid)
 	INNER JOIN cocommoninvoice ci ON ci.invoicenumber::TEXT = ma.invoicenumber::TEXT
 	INNER JOIN cocommoninvoicepayment cip using (commoninvoiceid)
 	INNER JOIN comiscreceipttype mrt ON mrt.glacct = mai.accountid
 	INNER JOIN pamiscinvoice mi ON mi.miscrectype = mrt.miscreceipttypeid
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = mai.accountid
-	WHERE STATUS = 2
+	WHERE rawSTATUS = 2
 		AND coa.schedule = 0
 		AND mi.arcustomerid > 0
 	GROUP BY ma.businessactionid
@@ -195,7 +233,7 @@ AS (
 	INNER JOIN papart p ON p.partid = rp.partid
 	INNER JOIN serepairorderjob rj ON rj.repairorderjobid = rp.repairorderjobid
 	INNER JOIN serepairorderunit ru ON ru.repairorderunitid = rj.repairorderunitid
-	INNER JOIN serepairorder ro ON ro.repairorderid = ru.repairorderid
+	INNER JOIN repairordercte ro ON ro.repairorderid = ru.repairorderid
 	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
 	INNER JOIN cocategory c ON p.categoryid = c.categoryid
 	WHERE ba.STATUS = 2
@@ -208,7 +246,7 @@ AS (
 	FROM serepairorderlabor rol
 	INNER JOIN serepairorderjob roj ON roj.repairorderjobid = rol.repairorderjobid
 	INNER JOIN serepairorderunit rou ON rou.repairorderunitid = roj.repairorderunitid
-	INNER JOIN serepairorder ro ON ro.repairorderid = rou.repairorderid
+	INNER JOIN repairordercte ro ON ro.repairorderid = rou.repairorderid
 	INNER JOIN cocategory badcat ON badcat.categoryid = rol.categoryid
 		AND badcat.storeid != rol.storeid
 	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
@@ -218,7 +256,7 @@ AS (
 	UNION
 	
 	SELECT ba.businessactionid -- this one probably needs a different CR but it has to do with the warranty company having a diff storeid for freight
-	FROM serepairorder ro
+	FROM repairordercte ro
 	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
 	INNER JOIN serepairorderunit rou ON rou.repairorderid = ro.repairorderid
 	INNER JOIN serepairorderjob roj ON roj.repairorderunitid = rou.repairorderunitid
@@ -232,7 +270,7 @@ AS (
 erroraccmiscsaletype
 AS (
 	SELECT ba.businessactionid
-	FROM serepairorder ro
+	FROM repairordercte ro
 	INNER JOIN cosaletype st ON st.saletypeid = ro.miscitemsaletypeid
 		AND ro.storeid != st.storeid
 	INNER JOIN mabusinessaction ba ON ba.STATUS = 2
@@ -243,7 +281,7 @@ erroraccpicat
 AS (
 	SELECT ba.businessactionid
 	FROM mabusinessaction ba
-	INNER JOIN papartinvoiceline pi ON pi.partinvoiceid = ba.documentid
+	INNER JOIN partinvoicelinecte pi ON pi.partinvoiceid = ba.documentid
 	INNER JOIN cocategory c ON c.categoryid = pi.categoryid
 		AND c.storeid != pi.storeid
 	WHERE ba.STATUS = 2
@@ -284,7 +322,7 @@ AS (
 partinvoicescheduledmu
 AS (
 	SELECT ba.businessactionid
-	FROM papartinvoiceline pil
+	FROM partinvoicelinecte pil
 	INNER JOIN partinvoicecte pi ON pi.partinvoiceid = pil.partinvoiceid
 	INNER JOIN cocategory c ON c.categoryid = pil.categoryid
 	INNER JOIN mabusinessaction ba ON ba.documentid = pil.partinvoiceid
@@ -311,7 +349,7 @@ AS (
 	FROM serepairorderpart rop
 	INNER JOIN serepairorderjob roj ON roj.repairorderjobid = rop.repairorderjobid
 	INNER JOIN serepairorderunit rou ON rou.repairorderunitid = roj.repairorderunitid
-	INNER JOIN serepairorder ro ON ro.repairorderid = rou.repairorderid
+	INNER JOIN repairordercte ro ON ro.repairorderid = rou.repairorderid
 	INNER JOIN cocategory c ON c.categoryid = rop.categoryid
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = c.glinventory
 	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
@@ -353,7 +391,7 @@ AS (
 	SELECT ma.businessactionid
 	FROM serepairorderjob roj
 	INNER JOIN serepairorderunit rou using (repairorderunitid)
-	INNER JOIN serepairorder ro using (repairorderid)
+	INNER JOIN repairordercte ro using (repairorderid)
 	INNER JOIN cosaletype st ON st.saletypeid = roj.saletypeid
 	INNER JOIN mabusinessaction ma ON ma.documentid = ro.repairorderid
 	WHERE isnonpayjob = 1
@@ -416,8 +454,8 @@ AS (
 	LEFT JOIN cotax t ON t.taxid = dut.taxentityid
 	INNER JOIN cotaxcategory tc ON tc.taxcategorydescription = dut.taxcategorydescription
 	INNER JOIN cotax t2 ON t2.taxcategoryid = tc.taxcategoryid
-	INNER JOIN sadealunit du ON du.dealunitid = dut.dealunitid
-	INNER JOIN sadeal d ON d.dealid = du.dealid
+	INNER JOIN dealunitcte du ON du.dealunitid = dut.dealunitid
+	INNER JOIN dealcte d ON d.dealid = du.dealid
 	INNER JOIN sadealfinalization f ON f.dealid = d.dealid
 	INNER JOIN mabusinessaction ba ON ba.documentid = f.dealfinalizationid
 	WHERE t.taxid IS NULL
@@ -428,8 +466,8 @@ AS (
 taxiddeal2 -- verified it works on two deals
 AS (
 	SELECT ba.businessactionid
-	FROM sadeal d
-	INNER JOIN sadealunit du ON du.dealid = d.dealid
+	FROM dealcte d
+	INNER JOIN dealunitcte du ON du.dealid = d.dealid
 	INNER JOIN sadealunittax dut ON dut.dealunitid = du.dealunitid
 	INNER JOIN cotax t ON t.taxid = dut.taxentityid
 	INNER JOIN cotax t1 ON t1.description ilike dut.taxdescription
@@ -469,10 +507,9 @@ AS (
 	SELECT ba.businessactionid
 	FROM sadealadjustmenttax dat
 	INNER JOIN sadealadjustment da ON da.dealadjustmentid = dat.dealadjustmentid
-	INNER JOIN mabusinessaction ba ON ba.documentid = da.dealadjustmentid
-	INNER JOIN maedata errortext ON errortext.businessactionid = ba.businessactionid
-	WHERE ba.STATUS = 2
-		AND errortext.txt ilike '%Tax Entity not rounded%'
+	INNER JOIN maedata ba ON ba.rawdocumentid = da.dealadjustmentid
+	WHERE ba.rawSTATUS = 2
+		AND ba.txt ilike '%Tax Entity not rounded%'
 		AND ROUND(taxamt, - 2) != taxamt
 	GROUP BY ba.businessactionid
 	
@@ -482,20 +519,19 @@ AS (
 	FROM rerentalpostingtaxdetail rptd
 	INNER JOIN rerentalpostingtax rpt ON rpt.rentalpostingtaxid = rptd.rentalpostingtaxid
 	INNER JOIN rerentalposting rp ON rp.rentalpostingid = rpt.rentalpostingid
-	INNER JOIN mabusinessaction ba ON ba.documentid = rp.rentalpostingid
-	INNER JOIN maedata errortext ON errortext.businessactionid = ba.businessactionid
+	INNER JOIN maedata ba ON ba.rawdocumentid = rp.rentalpostingid
 	WHERE ROUND(rptd.taxamount, - 2) != rptd.taxamount
-		AND ba.STATUS = 2
-		AND errortext.txt ilike '%Tax Entity not rounded%'
+		AND ba.rawSTATUS = 2
+		AND ba.txt ilike '%Tax Entity not rounded%'
 	GROUP BY ba.businessactionid
 	),
 dealunitid1 -- https://lightspeeddms.atlassian.net/browse/EVO-21635
 AS (
 	SELECT ba.businessactionid
 	FROM samajorunit mu
-	LEFT JOIN sadealunit x ON x.majorunitid = mu.majorunitid
-	LEFT JOIN sadealunit x1 ON x1.dealunitid = mu.dealunitid
-	INNER JOIN sadeal d ON d.dealid = x.dealid
+	LEFT JOIN dealunitcte x ON x.majorunitid = mu.majorunitid
+	LEFT JOIN dealunitcte x1 ON x1.dealunitid = mu.dealunitid
+	INNER JOIN dealcte d ON d.dealid = x.dealid
 	INNER JOIN sadealfinalization df ON df.dealid = d.dealid
 	INNER JOIN mabusinessaction ba ON ba.businessactionid = df.dealfinalizationid
 	WHERE mu.STATE = 2
@@ -522,19 +558,19 @@ AS (
 	SELECT ba.businessactionid
 	FROM paparthistory h
 	INNER JOIN partinvoicecte i ON h.partinvoiceid = i.partinvoiceid
-	INNER JOIN papartinvoiceline il ON h.partinvoicelineid = il.partinvoicelineid
+	INNER JOIN partinvoicelinecte il ON h.partinvoicelineid = il.partinvoicelineid
 	LEFT JOIN paspecialorder so ON so.partinvoiceid = h.partinvoiceid
 	INNER JOIN mabusinessaction ba ON ba.documentid = h.partinvoiceid
 	WHERE il.partinvoiceid <> h.partinvoiceid
 		AND ba.STATUS = 2
-    GROUP BY ba.businessactionid
+	GROUP BY ba.businessactionid
 	),
 oobmissingdiscountpartinvoice
 AS (
 	SELECT businessactionid
 	FROM (
 		SELECT ba.businessactionid
-		FROM papartinvoiceline pi
+		FROM partinvoicelinecte pi
 		INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
 		INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
 		INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
@@ -688,7 +724,7 @@ AS (
 	SELECT ba.businessactionid
 	FROM cocommoninvoicepayment cip
 	INNER JOIN cocommoninvoice ci ON ci.commoninvoiceid = cip.commoninvoiceid
-	INNER JOIN serepairorder ro ON ro.repairorderid = ci.documentid
+	INNER JOIN repairordercte ro ON ro.repairorderid = ci.documentid
 	INNER JOIN serototals rt ON rt.roid = ro.repairorderid
 	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
 	WHERE ba.STATUS = 2
@@ -701,7 +737,7 @@ dealoobins
 AS (
 	SELECT ba.businessactionid
 	FROM sadealfinalization df
-	INNER JOIN sadeal d ON d.dealid = df.dealid
+	INNER JOIN dealcte d ON d.dealid = df.dealid
 	INNER JOIN mabusinessaction ba ON ba.documentid = df.dealfinalizationid
 	INNER JOIN (
 		SELECT dealid,
@@ -733,7 +769,7 @@ AS (
 oobwrongamtsalesdeal
 AS (
 	SELECT b.businessactionid
-	FROM sadeal A
+	FROM dealcte A
 	INNER JOIN sadealfinalization df ON df.dealid = a.dealid
 	INNER JOIN mabusinessaction B ON b.documentid = df.dealfinalizationid
 	INNER JOIN cocommoninvoicepayment C ON C.commoninvoiceid = df.commoninvoiceid
@@ -751,7 +787,7 @@ AS (
 		SELECT ba.businessactionid
 		FROM serepairordertaxentity e
 		INNER JOIN serepairordertaxitem i ON e.repairordertaxitemid = i.repairordertaxitemid
-		INNER JOIN serepairorder ro ON ro.repairorderid = i.repairorderid
+		INNER JOIN repairordercte ro ON ro.repairorderid = i.repairorderid
 		INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
 		WHERE ba.STATUS = 2
 		GROUP BY ba.businessactionid,
