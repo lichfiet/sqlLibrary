@@ -520,6 +520,7 @@ AS (
 	INNER JOIN mabusinessaction ba ON ba.documentid = h.partinvoiceid
 	WHERE il.partinvoiceid <> h.partinvoiceid
 		AND ba.STATUS = 2
+	GROUP BY ba.businessactionid
 	),
 oobmissingdiscountpartinvoice
 AS (
