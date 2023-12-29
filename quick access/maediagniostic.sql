@@ -108,13 +108,13 @@ partinvoicecte
 AS (
 	SELECT pi.*
 	FROM papartinvoice pi
-	INNER JOIN maedata ON pi.dtstamp >= maedata.TIMESTAMP
+	INNER JOIN maedata ON pi.partinvoiceid = maedata.rawdocumentid
 	),
 partinvoicelinecte
 AS (
 	SELECT pil.*
 	FROM papartinvoiceline pil
-	INNER JOIN maedata ON pil.dtstamp >= maedata.TIMESTAMP
+	INNER JOIN partinvoicecte pi ON pi.partinvoiceid = pil.partinvoiceid
 	),
 dealcte
 AS (
@@ -124,10 +124,10 @@ AS (
 	),
 dealunitcte
 AS (
-    SELECT du.*
-    FROM sadealunit du
-    INNER JOIN maedata ON du.dtstamp >= maedata.TIMESTAMP
-),
+	SELECT du.*
+	FROM sadealunit du
+	INNER JOIN maedata ON du.dtstamp >= maedata.TIMESTAMP
+	),
 repairordercte
 AS (
 	SELECT ro.*
@@ -136,10 +136,10 @@ AS (
 	),
 repairorderunitcte
 AS (
-    SELECT rou.*
-    FROM serepairorderunit rou
-    INNER JOIN maedata ON rou.dtstamp > maedata.TIMESTAMP
-),
+	SELECT rou.*
+	FROM serepairorderunit rou
+	INNER JOIN maedata ON rou.dtstamp > maedata.TIMESTAMP
+	),
 missingmae
 AS (
 	SELECT ba.businessactionid
@@ -151,16 +151,15 @@ AS (
 schedacctnotvalidar
 AS (
 	SELECT ma.businessactionid
-	FROM mabusinessaction ma
+	FROM maedata ma
 	INNER JOIN mabusinessactionitem mai using (businessactionid)
 	INNER JOIN cocommoninvoice ci ON ci.invoicenumber::TEXT = ma.invoicenumber::TEXT
 	INNER JOIN cocommoninvoicepayment cip using (commoninvoiceid)
 	INNER JOIN comethodofpayment mop ON mop.methodofpaymentid = cip.methodofpaymentid
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = mop.glacct
-	WHERE STATUS = 2
+	WHERE rawSTATUS = 2
 		AND coa.schedule = 0
 		AND cip.arcustomerid <> 0
-		AND cip.dtstamp > '2022-03-15 00:00:00.000'
 	GROUP BY ma.businessactionid
 	),
 miscinvnonarmop
@@ -662,58 +661,60 @@ AS (
 armopinternalinvoice
 AS (
 	SELECT ba.businessactionid
-	FROM mabusinessaction ba
+	FROM maedata ba
 	INNER JOIN mabusinessactionerror bae using (businessactionid)
-	INNER JOIN partinvoicecte pi ON pi.partinvoiceid = ba.documentid
+	INNER JOIN partinvoicecte pi ON pi.partinvoiceid = ba.rawdocumentid
 	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = pi.commoninvoiceid
-	WHERE ba.STATUS = 2
-		AND bae.errortext ilike 'No A/R Customer for Method of Payment %'
+	WHERE ba.rawSTATUS = 2
+		AND ba.txt ilike 'No A/R Customer for Method of Payment %'
 		AND pi.invoicetype = 1
 		AND pi.majorunitid > 0
 		AND cip.amount = 0
-		AND pi.createdate BETWEEN '2020-10-01'
-			AND '2020-12-19'
 	GROUP BY ba.businessactionid
 	),
 oobmissingmoppartinvoice
 AS (
 	SELECT ba.businessactionid
-	FROM partinvoicecte pi
-	INNER JOIN mabusinessaction ba ON ba.documentid = pi.partinvoiceid
+	FROM maedata ba
+	INNER JOIN partinvoicecte pi ON ba.rawdocumentid = pi.partinvoiceid
 	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
 	INNER JOIN cocommoninvoice ci ON ci.commoninvoiceid = pi.commoninvoiceid
 	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
-	INNER JOIN (
-		SELECT (sum(debitamt - creditamt) * - 1) AS oobamt,
-			businessactionid
-		FROM mabusinessactionitem
-		GROUP BY businessactionid
-		) sums ON sums.businessactionid = ba.businessactionid
-	WHERE ba.STATUS = 2
+	WHERE ba.rawSTATUS = 2
 		AND pi.invoicetype NOT IN (2, 3)
-		AND sums.oobamt = pit.soldnowsubtotal
+		AND ba.oobamt = pit.soldnowsubtotal
 		AND cip.description = ''
 	GROUP BY ba.businessactionid
 	HAVING sum(cip.amount) = 0
+	),
+oobnomopamountpartinvoice
+AS (
+	SELECT ba.businessactionid
+	FROM maedata ba
+	INNER JOIN partinvoicecte pi ON ba.rawdocumentid = pi.partinvoiceid
+	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
+	INNER JOIN cocommoninvoice ci ON ci.commoninvoiceid = pi.commoninvoiceid
+	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
+	WHERE ba.rawSTATUS = 2
+		AND pi.invoicetype NOT IN (2, 3)
+		AND ba.oobamt = pit.soldnowsubtotal
+		AND cip.description != ''
+	GROUP BY ba.businessactionid
+	HAVING sum(cip.amount) = 0
+	    AND count(cip.commoninvoicepaymentid) = 1
 	),
 oobzerosummoppartinvoice
 AS (
 	-- EVO-31037
 	SELECT ba.businessactionid
 	FROM partinvoicecte pi
-	INNER JOIN mabusinessaction ba ON ba.documentid = pi.partinvoiceid
+	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
 	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
 	INNER JOIN cocommoninvoice ci ON ci.commoninvoiceid = pi.commoninvoiceid
 	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
-	INNER JOIN (
-		SELECT (sum(debitamt - creditamt) * - 1) AS oobamt,
-			businessactionid
-		FROM mabusinessactionitem
-		GROUP BY businessactionid
-		) sums ON sums.businessactionid = ba.businessactionid
-	WHERE ba.STATUS = 2
+	WHERE ba.rawSTATUS = 2
 		AND pi.invoicetype NOT IN (2, 3)
-		AND sums.oobamt = pit.soldnowsubtotal
+		AND ba.oobamt = pit.soldnowsubtotal
 		AND cip.description != ''
 	GROUP BY ba.businessactionid
 	HAVING sum(cip.amount) = 0
@@ -722,12 +723,12 @@ AS (
 oobwrongmopamountrepairorder
 AS (
 	SELECT ba.businessactionid
-	FROM cocommoninvoicepayment cip
-	INNER JOIN cocommoninvoice ci ON ci.commoninvoiceid = cip.commoninvoiceid
-	INNER JOIN repairordercte ro ON ro.repairorderid = ci.documentid
+	FROM maedata ba
+	INNER JOIN repairordercte ro ON ba.rawdocumentid = ro.repairorderid
 	INNER JOIN serototals rt ON rt.roid = ro.repairorderid
-	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
-	WHERE ba.STATUS = 2
+	INNER JOIN cocommoninvoice ci ON ro.repairorderid = ci.documentid
+	INNER JOIN cocommoninvoicepayment cip ON ci.commoninvoiceid = cip.commoninvoiceid
+	WHERE ba.rawSTATUS = 2
 		AND ro.storeid = ba.storeid
 	GROUP BY roid,
 		ba.businessactionid
@@ -738,7 +739,7 @@ AS (
 	SELECT ba.businessactionid
 	FROM sadealfinalization df
 	INNER JOIN dealcte d ON d.dealid = df.dealid
-	INNER JOIN mabusinessaction ba ON ba.documentid = df.dealfinalizationid
+	INNER JOIN maedata ba ON ba.rawdocumentid = df.dealfinalizationid
 	INNER JOIN (
 		SELECT dealid,
 			sum(price) AS insprice
@@ -756,15 +757,9 @@ AS (
 		FROM cocommoninvoicepayment
 		GROUP BY commoninvoiceid
 		) cip ON cip.commoninvoiceid = ci.commoninvoiceid
-	INNER JOIN (
-		SELECT businessactionid,
-			sum(debitamt - creditamt) * - 1 AS oob
-		FROM mabusinessactionitem
-		GROUP BY businessactionid
-		) oob ON oob.businessactionid = ba.businessactionid
-	WHERE ba.STATUS = 2
-		AND (amts + oob.oob) / 2 = di.insprice
-		AND ((amts + oob.oob) * - 1) / 2 = d.balancetofinance
+	WHERE ba.rawSTATUS = 2
+		AND (amts + ba.oobamt) / 2 = di.insprice
+		AND ((amts + ba.oobamt) * - 1) / 2 = d.balancetofinance
 	),
 oobwrongamtsalesdeal
 AS (
@@ -797,12 +792,12 @@ AS (
 		) error
 	GROUP BY businessactionid
 	)
-SELECT maedata.documentnumber AS docnumber,
-	maedata.doctype AS documenttype,
-	maedata.errorstatus AS STATUS,
-	maedata.docdate AS DATE,
+SELECT ba.documentnumber AS docnumber,
+	ba.doctype AS documenttype,
+	ba.errorstatus AS STATUS,
+	ba.docdate AS DATE,
 	s.storename || ', Id:' || s.storeid::VARCHAR AS storeandstoreid,
-	ba.documentid,
+	ba.rawdocumentid,
 	CASE 
 		WHEN missingmae.businessactionid IS NOT NULL
 			THEN 'EVO-20030 Document Missing from MAE List | T1 Preapproved'
@@ -922,6 +917,10 @@ SELECT maedata.documentnumber AS docnumber,
 			THEN 'EVO-39505 Invoice OOB paid with Blank Method of Payment 0$ | T2'
 		ELSE ''
 		END || CASE 
+		WHEN oobmissingmoppartinvoice.businessactionid IS NOT NULL
+			THEN 'EVO-14709 Invoice OOB paid with Valid Method of Payment 0$ | T2'
+		ELSE ''
+		END || CASE 
 		WHEN oobwrongmopamountrepairorder.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
 			THEN 'EVO-30796 Repair Order OOB Method of Payment Amount Incorrect | T1 Preapproved'
 		ELSE ''
@@ -939,13 +938,12 @@ SELECT maedata.documentnumber AS docnumber,
 		ELSE ''
 		END AS issue_description_and_cr,
 	CASE 
-		WHEN maedata.oobamt != 0
-			THEN maedata.oob
+		WHEN ba.oobamt != 0
+			THEN ba.oob
 		ELSE 'N/A'
 		END AS balancestate,
-	maedata.txt AS errormessage
-FROM mabusinessaction ba
-LEFT JOIN maedata ON maedata.businessactionid = ba.businessactionid
+	ba.txt AS errormessage
+FROM maedata ba
 LEFT JOIN costore s ON s.storeid = ba.storeid
 LEFT JOIN erroraccropart earop ON earop.businessactionid = ba.businessactionid -- EVO-26911 RO Part with Bad Categoryid
 LEFT JOIN erroraccrolabor earol ON earol.businessactionid = ba.businessactionid -- EVO-18036 RO Labor with Bad Categoryid
@@ -975,11 +973,12 @@ LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.busines
 LEFT JOIN oobnonpaypartinvoice ON oobnonpaypartinvoice.businessactionid = ba.businessactionid -- EVO-39247
 LEFT JOIN taxoobpartinvoice ON taxoobpartinvoice.businessactionid = ba.businessactionid -- EVO-17198 taxes oob compared to tax entity amounts
 LEFT JOIN oobmissingmoppartinvoice ON oobmissingmoppartinvoice.businessactionid = ba.businessactionid
+LEFT JOIN oobnomopamountpartinvoice ON oobnomopamountpartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN oobzerosummoppartinvoice ON oobzerosummoppartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN armopinternalinvoice ON armopinternalinvoice.businessactionid = ba.businessactionid -- EVO-31066
 LEFT JOIN oobwrongmopamountrepairorder ON oobwrongmopamountrepairorder.businessactionid = ba.businessactionid -- EVO-30796 Mop Amount less than Amount to Collect on RO
 LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.businessactionid -- EVO-31125
 LEFT JOIN taxroundingrepairorder ON taxroundingrepairorder.businessactionid = ba.businessactionid
-WHERE ba.STATUS IN (2, 4)
+WHERE ba.rawSTATUS IN (2, 4)
 ORDER BY s.storename ASC,
-	documentdate DESC
+	ba.TIMESTAMP DESC
