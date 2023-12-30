@@ -99,6 +99,7 @@ AS (
 	LEFT JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid
 	LEFT JOIN mabusinessactionerror bae ON bae.businessactionid = ba.businessactionid
 	WHERE ba.STATUS IN (2, 4)
+		AND documentnumber = '11955961'
 	GROUP BY ba.businessactionid,
 		documentnumber,
 		STATUS,
@@ -109,36 +110,39 @@ AS (
 	SELECT pi.*
 	FROM papartinvoice pi
 	INNER JOIN maedata ON pi.partinvoiceid = maedata.rawdocumentid
+	WHERE pi.storeid = 20
 	),
 partinvoicelinecte
 AS (
 	SELECT pil.*
 	FROM papartinvoiceline pil
 	INNER JOIN partinvoicecte pi ON pi.partinvoiceid = pil.partinvoiceid
+	WHERE pil.storeid = 20
 	),
 dealcte
 AS (
 	SELECT d.*
 	FROM sadeal d
 	INNER JOIN maedata ON d.dtstamp >= maedata.TIMESTAMP
+	WHERE d.storeid = 20
 	),
 dealunitcte
 AS (
 	SELECT du.*
 	FROM sadealunit du
-	INNER JOIN maedata ON du.dtstamp >= maedata.TIMESTAMP
+	INNER JOIN dealcte d ON d.dealid = du.dealid
 	),
 repairordercte
 AS (
 	SELECT ro.*
 	FROM serepairorder ro
-	INNER JOIN maedata ON ro.dtstamp > maedata.TIMESTAMP
+	INNER JOIN maedata ON ro.repairorderid = maedata.rawdocumentid
 	),
 repairorderunitcte
 AS (
 	SELECT rou.*
 	FROM serepairorderunit rou
-	INNER JOIN maedata ON rou.dtstamp > maedata.TIMESTAMP
+	INNER JOIN repairordercte ON repairordercte.repairorderid = rou.repairorderid
 	),
 missingmae
 AS (
@@ -251,9 +255,9 @@ AS (
 	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
 	WHERE ba.STATUS = 2
 	GROUP BY businessactionid
-	
-	UNION
-	
+	),
+erroraccrolaborwarrcom
+AS (
 	SELECT ba.businessactionid -- this one probably needs a different CR but it has to do with the warranty company having a diff storeid for freight
 	FROM repairordercte ro
 	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
@@ -482,20 +486,18 @@ AS (
 taxidpartinvoice1
 AS (
 	SELECT ba.businessactionid
-	FROM mabusinessaction ba
-	INNER JOIN partinvoicecte pi ON pi.partinvoiceid = ba.documentid
+	FROM maedata ba
+	INNER JOIN papartinvoice pi ON pi.partinvoiceid = ba.rawdocumentid
 	INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
 	INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
 	LEFT JOIN cotax t ON t.taxid = pite.taxentityid
 	LEFT JOIN cotax t1 ON t1.taxcategoryid = piti.taxcategoryid
-	INNER JOIN cotaxcategory ct ON ct.taxcategoryid = piti.taxcategoryid
-	WHERE ba.STATUS = 2
+	WHERE ba.rawSTATUS = 2
 		AND t1.taxid <> t.taxid
 		AND t1.description = t.description
 		AND t1.taxid <> pite.taxentityid
-		AND ct.taxcategoryid = t1.taxcategoryid
 		OR (
-			ba.STATUS = 2
+			ba.rawSTATUS = 2
 			AND pite.taxentityid IS NULL
 			)
 	GROUP BY partinvoicetaxentityid,
@@ -701,7 +703,7 @@ AS (
 		AND cip.description != ''
 	GROUP BY ba.businessactionid
 	HAVING sum(cip.amount) = 0
-	    AND count(cip.commoninvoicepaymentid) = 1
+		AND count(cip.commoninvoicepaymentid) = 1
 	),
 oobzerosummoppartinvoice
 AS (
@@ -979,6 +981,5 @@ LEFT JOIN armopinternalinvoice ON armopinternalinvoice.businessactionid = ba.bus
 LEFT JOIN oobwrongmopamountrepairorder ON oobwrongmopamountrepairorder.businessactionid = ba.businessactionid -- EVO-30796 Mop Amount less than Amount to Collect on RO
 LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.businessactionid -- EVO-31125
 LEFT JOIN taxroundingrepairorder ON taxroundingrepairorder.businessactionid = ba.businessactionid
-WHERE ba.rawSTATUS IN (2, 4)
 ORDER BY s.storename ASC,
 	ba.TIMESTAMP DESC
