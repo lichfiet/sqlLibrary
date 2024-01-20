@@ -10,12 +10,18 @@
 -- Too many or few consolidations compared to the avg for the department rounded to the nearest whole number
 WITH conscounts
 AS (
-	SELECT count(xr.acctdeptid) AS conscount,
+	SELECT sum(CASE 
+				WHEN xr.acctdeptid IS NULL
+					THEN 0
+				ELSE 1
+				END) AS conscount,
 		coa.acctdept,
-		coa.deptid
-	FROM glconsxref xr
-	LEFT JOIN glchartofaccounts coa ON coa.acctdeptid = xr.acctdeptid
+		coa.deptid,
+		coa.acctdeptid AS HELP
+	FROM glchartofaccounts coa
+	LEFT JOIN glconsxref xr ON coa.acctdeptid = xr.acctdeptid
 	WHERE coa.accttype IN (3, 4, 6)
+	    AND coa.headerdetailtotalcons = 2
 	GROUP BY coa.acctdeptid,
 		coa.acctdept,
 		coa.deptid
@@ -41,7 +47,12 @@ SELECT 'Account # ' || cc.acctdept || ' has irregular # of consolidations for it
 	'(# of Consolidations): ' || cc.conscount || ' , (Dept Average): ' || da.avgcount AS consolidation_count
 FROM conscounts cc
 INNER JOIN deptavg da ON da.deptid = cc.deptid
+LEFT JOIN (
+	SELECT DISTINCT acctdeptid AS accts
+	FROM glhistory
+	) a ON a.accts = cc.HELP
 WHERE cc.conscount != da.avgcount
+	AND a.accts IS NOT NULL
 ORDER BY da.avgcount - cc.conscount DESC;
 
 --
