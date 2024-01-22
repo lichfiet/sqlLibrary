@@ -174,7 +174,7 @@ HAVING sum(amtpaidthischeck) != (docamt - remainingamt)
 
 
 -- Output 2
-SELECT '$' || (ROUND(sum(docamt * .0001) OVER (PARTITION BY sl.acctid), 2))::VARCHAR AS total_invoice_adjustment,
+SELECT '$' || ROUND(sum(docamt * .0001) OVER (PARTITION BY sl.acctid), 0)::VARCHAR AS totalinvoices,
 	v.name AS vendorname,
 	CASE 
 		WHEN badids.journalentryid IS NULL
@@ -186,7 +186,7 @@ FROM glsltransaction sl
 INNER JOIN apvendor v ON v.vendorid = sl.acctid
 LEFT JOIN apcheckinvoicelist cl ON cl.apinvoiceid = sl.sltrxid
 LEFT JOIN (
-	SELECT h.journalentryid, 
+	SELECT h.journalentryid,
 		coa.accountingid,
 		CASE 
 			WHEN h.accountingid != coa.accountingid
@@ -208,26 +208,11 @@ LEFT JOIN (
 	FROM glhistory h
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = h.acctdeptid
 	INNER JOIN costoremap sm ON sm.parentstoreid = coa.accountingid
-	LEFT JOIN glsltransaction sl ON sl.sltrxid = h.schedxrefid
-	LEFT JOIN apvendor v ON v.vendorid = sl.acctid
-	LEFT JOIN costoremap smv on smv.parentstoreid = v.accountingid
 	WHERE (
 			h.accountingidluid != coa.accountingidluid
 			OR h.accountingid != coa.accountingid
 			OR h.locationidluid != sm.childstoreidluid
 			OR h.locationid != sm.childstoreid
-			OR (
-				sl.sltrxid IS NOT NULL
-				AND sl.accountingid = smv.parentstoreid
-				AND (
-					sl.storeid != h.locationid
-					OR sl.storeidluid != h.locationidluid
-					OR sl.accountingid != h.accountingid
-					OR sl.accountingid != sl.accountingidluid
-					)
-				)
-			OR sl.accountingid != v.accountingid
-			OR sl.storeid != smv.childstoreid
 			)
 	GROUP BY h.journalentryid,
 		h.accountingidluid,
@@ -241,14 +226,13 @@ LEFT JOIN (
 	) badids ON badids.journalentryid = sl.docrefglid
 	AND badids.accountingid = v.accountingid
 WHERE sltrxstate NOT IN (1, 9)
-	--	AND v.vendornumber IN (xxxxxx)
+	AND v.vendornumber IN (xxxxx)
 	AND remainingamt <> docamt
 	AND sl.accttype = 2
 	AND cl.apinvoiceid IS NULL -- replaces the nested select using left join
 	AND sl.description NOT ilike '%CHECK%'
 	AND sl.description NOT ilike '%Void%'
-ORDER BY v.name ASC,
-	badids.bad_ids ASC;
+ORDER BY v.name ASC, badids.bad_ids ASC
 
 -- oyutput 3 ids
 SELECT v.name AS vendor_name,
