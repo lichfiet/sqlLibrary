@@ -232,7 +232,7 @@ WHERE sltrxstate NOT IN (1, 9)
 	AND cl.apinvoiceid IS NULL -- replaces the nested select using left join
 	AND sl.description NOT ilike '%CHECK%'
 	AND sl.description NOT ilike '%Void%'
-ORDER BY v.name ASC, badids.bad_ids ASC
+ORDER BY v.name ASC, badids.bad_ids ASC;
 
 -- oyutput 3 ids
 SELECT v.name AS vendor_name,
@@ -333,4 +333,3 @@ LEFT JOIN glsltransaction sl ON sl.sltrxid = tpi.apinvoiceid
 LEFT JOIN apvendor v ON v.vendorid = tpi.vendorid
 WHERE sl.sltrxid IS NULL
 	OR sl.sltrxstate NOT IN (1, 2);
-
