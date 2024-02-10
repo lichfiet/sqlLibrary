@@ -69,3 +69,29 @@ ORDER BY CASE
 		ELSE 1
 		END DESC,
 	co3.value ASC;
+
+/* CREDIT CARD INFORMATION */
+SELECT s.description AS store,
+    p7.value AS cmf,
+    p1.value AS integrationtype,
+	p2.value AS acceptorid,
+	p3.value AS accountid,
+	p4.value AS accounttoken,
+	p5.value AS giftcardid,
+	p6.value AS giftcardpass
+FROM costore s
+INNER JOIN copreference p1 ON s.storeid = p1.storeid
+INNER JOIN copreference p2 ON p2.storeid = s.storeid
+INNER JOIN copreference p3 ON p3.storeid = s.storeid
+INNER JOIN copreference p4 ON p4.storeid = s.storeid
+INNER JOIN copreference p5 ON p5.storeid = s.storeid
+INNER JOIN copreference p6 ON p6.storeid = s.storeid
+INNER JOIN copreference p7 ON p7.storeid = s.storeid
+WHERE p1.id = 'shop-credit-card-integration-type'
+	AND p2.id = 'shop-tripos-acceptor-id'
+	AND p3.id = 'shop-tripos-account-id'
+	AND p4.id = 'shop-tripos-account-token'
+	AND p5.id = 'shop-tripos-store-card-id'
+	AND p6.id = 'shop-tripos-store-card-password'
+	AND p7.id = 'shop-DealerID'
+ORDER BY s.storeid desc
