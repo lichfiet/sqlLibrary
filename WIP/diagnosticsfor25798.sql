@@ -23,6 +23,31 @@
 -- will show you the increase or decrease in ap balance based on what
 -- the invoice's remaining amount should be.
 --
+/* Accounts Payable Health Check */
+--
+-- Info: This SQL will diagnose some common issues relating to CRs and other
+-- related issues caused by bugs. It also includes some info about things like
+-- the ap reconciliation.
+--
+-- To use: By default will select for all vendors, will make a single vendor one
+-- at some point.
+-- 
+-- Outputs:
+--
+--  1) Invoices Paid/Partially Paid/Not Paid
+--  2) Invoices Paid with no check history
+--  3) Store and Accounting Comparison vs glsl, coa, and glhist
+--  4) aptopayinv items linking to bad glsl data
+-- 
+/* Invoices Paid || Partially Paid || Not Paid when they shouldn't be */
+--
+-- This SQL diagnoses some of the issues noted in EVO-25798
+-- that have to do with the remaining amounts being incorrect on
+-- vendor invoices. It compares the amounts paid on 
+-- checks, with the current remaining amount, and
+-- will show you the increase or decrease in ap balance based on what
+-- the invoice's remaining amount should be.
+--
 SELECT v.name,
 	/* Invoice Number */ sl.documentnumber AS invoicenumber,
 	'$' || (
@@ -170,7 +195,8 @@ GROUP BY apinvoiceid,
 	v.name,
 	v.vendornumber
 HAVING sum(amtpaidthischeck) != (docamt - remainingamt)
-	OR voids.id IS NOT NULL;
+	OR voids.id IS NOT NULL
+	OR (remainingamt = 0 AND sltrxstate != 4);
 
 
 -- Output 2
