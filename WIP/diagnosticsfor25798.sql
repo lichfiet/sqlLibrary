@@ -252,7 +252,7 @@ LEFT JOIN (
 	) badids ON badids.journalentryid = sl.docrefglid
 	AND badids.accountingid = v.accountingid
 WHERE sltrxstate NOT IN (1, 9)
-	AND v.vendornumber IN (xxxxx)
+--	AND v.vendornumber IN (xxxxx)
 	AND remainingamt <> docamt
 	AND sl.accttype = 2
 	AND cl.apinvoiceid IS NULL -- replaces the nested select using left join
