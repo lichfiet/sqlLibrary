@@ -2,6 +2,7 @@ WITH maedata
 AS (
 	SELECT ba.businessactionid,
 		documentnumber,
+		ba.invoicenumber,
 		CASE documenttype
 			WHEN 1001
 				THEN 'Parts Invoice'
@@ -85,7 +86,14 @@ AS (
 				THEN 'In Balance'
 			ELSE 'Out of Balance!'
 			END AS oob,
-		left(string_agg(errortext, ''), 70) || '...' AS txt
+		left(string_agg(errortext, ''), 70) || '...' AS txt,
+		ba.STATUS AS rawstatus,
+		ba.businessactionid AS rawbusinessactionid,
+		ba.storeid AS rawstoreid,
+		ba.documentid AS rawdocumentid,
+		ba.documentdate AS rawdocumentdate,
+		ba.documenttype AS rawdocumenttype,
+		ba.storeid
 	FROM mabusinessaction ba
 	LEFT JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid
 	LEFT JOIN mabusinessactionerror bae ON bae.businessactionid = ba.businessactionid
@@ -94,14 +102,6 @@ AS (
 		documentnumber,
 		STATUS,
 		documenttype
-	),
-missingmae
-AS (
-	SELECT businessactionid
-	FROM mabusinessaction
-	WHERE storeid = 0
-		AND documentid = 0
-		AND STATUS = 2
 	),
 schedacctnotvalidar
 AS (
@@ -115,7 +115,6 @@ AS (
 	WHERE STATUS = 2
 		AND coa.schedule = 0
 		AND cip.arcustomerid <> 0
-		AND cip.dtstamp > '2022-03-15 00:00:00.000'
 	GROUP BY ma.businessactionid
 	),
 miscinvnonarmop
@@ -156,13 +155,13 @@ AS (
 				PARTITION BY ba.documentnumber ORDER BY ba1.invoicenumber DESC
 				) AS num,
 			ba.businessactionid AS errorid
-		FROM mabusinessaction ba
+		FROM maedata ba
 		INNER JOIN mabusinessaction ba1 USING (documentnumber)
-		WHERE ba.STATUS = 2
-			AND ba.documenttype = 3006
+		WHERE ba.rawSTATUS = 2
+			AND ba.rawdocumenttype = 3006
 			AND ba1.documenttype = 3001
 			AND ba1.invoicenumber < ba.invoicenumber
-			AND ba.storeid = ba1.storeid
+			AND ba.rawstoreid = ba1.storeid
 		) DUMP ON bi.businessactionid = DUMP.businessactionid
 	WHERE (
 			bi.apid != 0
@@ -189,9 +188,9 @@ AS (
 	INNER JOIN serepairorderjob rj ON rj.repairorderjobid = rp.repairorderjobid
 	INNER JOIN serepairorderunit ru ON ru.repairorderunitid = rj.repairorderunitid
 	INNER JOIN serepairorder ro ON ro.repairorderid = ru.repairorderid
-	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
+	INNER JOIN maedata ba ON ba.rawdocumentid = ro.repairorderid
 	INNER JOIN cocategory c ON p.categoryid = c.categoryid
-	WHERE ba.STATUS = 2
+	WHERE ba.rawSTATUS = 2
 		AND c.storeid != rp.storeid
 	GROUP BY ba.businessactionid
 	),
@@ -207,9 +206,9 @@ AS (
 	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
 	WHERE ba.STATUS = 2
 	GROUP BY businessactionid
-	
-	UNION
-	
+	),
+erroraccrolabor2
+AS (
 	SELECT ba.businessactionid -- this one probably needs a different CR but it has to do with the warranty company having a diff storeid for freight
 	FROM serepairorder ro
 	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
@@ -325,17 +324,11 @@ AS (
 		AND ba.STATUS = 2
 	GROUP BY ba.businessactionid
 	),
-analysispending -- verified to work at least once 
+analysispending
 AS (
 	SELECT ba.businessactionid
 	FROM papartadjustment pa
 	INNER JOIN mabusinessaction ba ON ba.documentid = pa.receivingdocumentid
-	INNER JOIN (
-		SELECT max(partshipmentid) AS id,
-			supplierid
-		FROM papartshipment
-		GROUP BY supplierid
-		) cr ON cr.supplierid = pa.supplierid
 	LEFT JOIN papartshipment ps ON ps.partshipmentid = pa.partshipmentid
 	WHERE ps.partshipmentid IS NULL
 		AND ba.STATUS = 4
@@ -432,7 +425,6 @@ AS (
 	INNER JOIN mabusinessaction ba ON ba.documentid = df.dealfinalizationid
 	WHERE ba.STATUS = 2
 		AND t.storeid <> d.storeid
-		AND d.finalizedate > '2018-10-01'
 	GROUP BY ba.businessactionid
 	),
 taxidpartinvoice1
@@ -466,7 +458,6 @@ AS (
 	INNER JOIN maedata errortext ON errortext.businessactionid = ba.businessactionid
 	WHERE ba.STATUS = 2
 		AND errortext.txt ilike '%Tax Entity not rounded%'
-		AND ROUND(taxamt, - 2) != taxamt
 	GROUP BY ba.businessactionid
 	
 	UNION
@@ -477,8 +468,7 @@ AS (
 	INNER JOIN rerentalposting rp ON rp.rentalpostingid = rpt.rentalpostingid
 	INNER JOIN mabusinessaction ba ON ba.documentid = rp.rentalpostingid
 	INNER JOIN maedata errortext ON errortext.businessactionid = ba.businessactionid
-	WHERE ROUND(rptd.taxamount, - 2) != rptd.taxamount
-		AND ba.STATUS = 2
+	WHERE ba.STATUS = 2
 		AND errortext.txt ilike '%Tax Entity not rounded%'
 	GROUP BY ba.businessactionid
 	),
@@ -591,16 +581,10 @@ AS (
 	FROM papartinvoice pi
 	INNER JOIN cosaletype st ON st.saletypeid = pi.handlingsaletypeid
 		AND st.usagecode = 7
-	INNER JOIN mabusinessaction ba ON ba.documentid = pi.partinvoiceid
-	INNER JOIN (
-		SELECT bai.businessactionid,
-			sum(debitamt - creditamt) AS oobamt
-		FROM mabusinessactionitem bai
-		GROUP BY bai.businessactionid
-		) oob ON oob.businessactionid = ba.businessactionid
-	WHERE ba.STATUS = 2
+	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
+	WHERE ba.rawSTATUS = 2
 		AND pi.invoicehandlingamt + specialorderhandling != 0
-		AND pi.invoicehandlingamt + specialorderhandling = oob.oobamt
+		AND pi.invoicehandlingamt + specialorderhandling = ba.oobamt
 	),
 taxoobpartinvoice -- https://lightspeeddms.atlassian.net/browse/EVO-17198
 AS (
@@ -625,29 +609,21 @@ AS (
 	WHERE ba.STATUS = 2
 		AND bae.errortext ilike 'No A/R Customer for Method of Payment %'
 		AND pi.invoicetype = 1
-		AND pi.majorunitid > 0
+		AND pi.majorunitid != 0
 		AND cip.amount = 0
-		AND pi.createdate BETWEEN '2020-10-01'
-			AND '2020-12-19'
 	GROUP BY ba.businessactionid
 	),
 oobmissingmoppartinvoice
 AS (
 	SELECT ba.businessactionid
 	FROM papartinvoice pi
-	INNER JOIN mabusinessaction ba ON ba.documentid = pi.partinvoiceid
+	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
 	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
 	INNER JOIN cocommoninvoice ci ON ci.commoninvoiceid = pi.commoninvoiceid
 	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
-	INNER JOIN (
-		SELECT (sum(debitamt - creditamt) * - 1) AS oobamt,
-			businessactionid
-		FROM mabusinessactionitem
-		GROUP BY businessactionid
-		) sums ON sums.businessactionid = ba.businessactionid
-	WHERE ba.STATUS = 2
+	WHERE ba.rawSTATUS = 2
 		AND pi.invoicetype NOT IN (2, 3)
-		AND sums.oobamt = pit.soldnowsubtotal
+		AND ba.oobamt = pit.soldnowsubtotal
 		AND cip.description = ''
 	GROUP BY ba.businessactionid
 	HAVING sum(cip.amount) = 0
@@ -657,19 +633,13 @@ AS (
 	-- EVO-31037
 	SELECT ba.businessactionid
 	FROM papartinvoice pi
-	INNER JOIN mabusinessaction ba ON ba.documentid = pi.partinvoiceid
+	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
 	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
 	INNER JOIN cocommoninvoice ci ON ci.commoninvoiceid = pi.commoninvoiceid
 	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
-	INNER JOIN (
-		SELECT (sum(debitamt - creditamt) * - 1) AS oobamt,
-			businessactionid
-		FROM mabusinessactionitem
-		GROUP BY businessactionid
-		) sums ON sums.businessactionid = ba.businessactionid
-	WHERE ba.STATUS = 2
+	WHERE ba.rawSTATUS = 2
 		AND pi.invoicetype NOT IN (2, 3)
-		AND sums.oobamt = pit.soldnowsubtotal
+		AND ba.oobamt = pit.soldnowsubtotal
 		AND cip.description != ''
 	GROUP BY ba.businessactionid
 	HAVING sum(cip.amount) = 0
@@ -694,7 +664,7 @@ AS (
 	SELECT ba.businessactionid
 	FROM sadealfinalization df
 	INNER JOIN sadeal d ON d.dealid = df.dealid
-	INNER JOIN mabusinessaction ba ON ba.documentid = df.dealfinalizationid
+	INNER JOIN maedata ba ON ba.rawdocumentid = df.dealfinalizationid
 	INNER JOIN (
 		SELECT dealid,
 			sum(price) AS insprice
@@ -712,15 +682,9 @@ AS (
 		FROM cocommoninvoicepayment
 		GROUP BY commoninvoiceid
 		) cip ON cip.commoninvoiceid = ci.commoninvoiceid
-	INNER JOIN (
-		SELECT businessactionid,
-			sum(debitamt - creditamt) * - 1 AS oob
-		FROM mabusinessactionitem
-		GROUP BY businessactionid
-		) oob ON oob.businessactionid = ba.businessactionid
-	WHERE ba.STATUS = 2
-		AND (amts + oob.oob) / 2 = di.insprice
-		AND ((amts + oob.oob) * - 1) / 2 = d.balancetofinance
+	WHERE ba.rawSTATUS = 2
+		AND (amts + ba.oobamt) / 2 = di.insprice
+		AND ((amts + ba.oobamt) * - 1) / 2 = d.balancetofinance
 	),
 oobwrongamtsalesdeal
 AS (
@@ -753,14 +717,16 @@ AS (
 		) error
 	GROUP BY businessactionid
 	)
-SELECT maedata.documentnumber AS docnumber,
-	maedata.doctype AS documenttype,
-	maedata.errorstatus AS STATUS,
-	maedata.docdate AS DATE,
+SELECT ba.documentnumber AS docnumber,
+	ba.doctype AS documenttype,
+	ba.errorstatus AS STATUS,
+	ba.docdate AS DATE,
 	s.storename || ', Id:' || s.storeid::VARCHAR AS storeandstoreid,
-	ba.documentid,
+	ba.rawdocumentid AS documentid,
 	CASE 
-		WHEN missingmae.businessactionid IS NOT NULL
+		WHEN ba.storeid = 0
+			AND ba.rawdocumentid = 0
+			AND ba.rawstatus = 2
 			THEN 'EVO-20030 Document Missing from MAE List | T1 Preapproved'
 		ELSE ''
 		END || CASE 
@@ -781,6 +747,7 @@ SELECT maedata.documentnumber AS docnumber,
 		ELSE ''
 		END || CASE 
 		WHEN earol.businessactionid IS NOT NULL
+			OR earol2.businessactionid IS NOT NULL
 			THEN 'EVO-18036 Error Accessing RO Labor Category | T2'
 		ELSE ''
 		END || CASE 
@@ -895,22 +862,21 @@ SELECT maedata.documentnumber AS docnumber,
 		ELSE ''
 		END AS issue_description_and_cr,
 	CASE 
-		WHEN maedata.oobamt != 0
-			THEN maedata.oob
+		WHEN ba.oobamt != 0
+			THEN ba.oob
 		ELSE 'N/A'
 		END AS balancestate,
-	maedata.txt AS errormessage
-FROM mabusinessaction ba
-LEFT JOIN maedata ON maedata.businessactionid = ba.businessactionid
+	ba.txt AS errormessage
+FROM maedata ba
 LEFT JOIN costore s ON s.storeid = ba.storeid
 LEFT JOIN erroraccropart earop ON earop.businessactionid = ba.businessactionid -- EVO-26911 RO Part with Bad Categoryid
 LEFT JOIN erroraccrolabor earol ON earol.businessactionid = ba.businessactionid -- EVO-18036 RO Labor with Bad Categoryid
+LEFT JOIN erroraccrolabor2 earol2 ON earol2.businessactionid = ba.businessactionid -- EVO-18036 RO Labor with Bad Categoryid
 LEFT JOIN erroraccpicat eapicat ON eapicat.businessactionid = ba.businessactionid -- EVO-13570 Part Invoice Line with Bad Categoryid
 LEFT JOIN erroraccreceivepart earpcat ON earpcat.businessactionid = ba.businessactionid -- EVO-31748 Part Receiving Doc with Bad Categoryid
 LEFT JOIN erroraccmiscsaletype ON erroraccmiscsaletype.businessactionid = ba.businessactionid -- EVO-39691 RO with bad misc item categoryid
 LEFT JOIN partinvoicescheduledmu ON partinvoicescheduledmu.businessactionid = ba.businessactionid -- EVO-14901 Part on Invoice with MU Category
 LEFT JOIN subletcloseoutscheduledmu ON subletcloseoutscheduledmu.businessactionid = ba.businessactionid
-LEFT JOIN missingmae ON missingmae.businessactionid = ba.businessactionid
 LEFT JOIN analysispending ON analysispending.businessactionid = ba.businessactionid
 LEFT JOIN invalidglnonpayro ON invalidglnonpayro.businessactionid = ba.businessactionid
 LEFT JOIN invalidgldealandinvoice ON invalidgldealandinvoice.businessactionid = ba.businessactionid
@@ -936,6 +902,6 @@ LEFT JOIN armopinternalinvoice ON armopinternalinvoice.businessactionid = ba.bus
 LEFT JOIN oobwrongmopamountrepairorder ON oobwrongmopamountrepairorder.businessactionid = ba.businessactionid -- EVO-30796 Mop Amount less than Amount to Collect on RO
 LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.businessactionid -- EVO-31125
 LEFT JOIN taxroundingrepairorder ON taxroundingrepairorder.businessactionid = ba.businessactionid
-WHERE ba.STATUS IN (2, 4)
+WHERE ba.rawSTATUS IN (2, 4)
 ORDER BY s.storename ASC,
-	documentdate DESC
+	ba.rawdocumentdate DESC
