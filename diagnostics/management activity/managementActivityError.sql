@@ -1,21 +1,25 @@
 WITH searchdata
 AS (
+	-- INSTRUCTIONS
+	---------------------------------------------------------------------------------------
+	--
+	-- 	Replace the CHANGE ME with one or more document numbers in a comma separated list,
+	--  you can do this with either the document numbers (the first [CHANGE ME]) or you,
+	--  can search using invoice numbers (the second [CHANGE ME]). Leaving them as is will
+	--  search for all management activities
+	--
+	---------------------------------------------------------------------------------------
+	--
+	-- /* You can add multiple values separate by commas ex. ('123', '456', '789') */
+	-- /* Or, you can search for one or the other invoice number/documentnumber ex. ('123) */
+	--
 	SELECT
-		-- INSTRUCTIONS
-		---------------------------------------------------------------------------------------
-		--
-		-- 	Replace the Change Me with one or more document numbers in a comma separated list,
-		--  you can do this with either the document numbers (the first [CHANGE ME]) or you,
-		--  can search using invoice numbers (the second [CHANGE ME]). Leaving them as is will
-		--  search for all management activities
-		--
-		---------------------------------------------------------------------------------------
 		--
 		-- SEARCH BY DOCUMENTNUMBER
-		ARRAY ['CHANGE ME'] AS documentnumbers,
+		ARRAY ['CHANGE_ME'] AS documentnumbers,
 		--
 		-- SEARCH BY INVOICE NUMBER
-		ARRAY ['CHANGE ME'] AS invoicenumbers
+		ARRAY ['CHANGE_ME'] AS invoicenumbers
 		--
 		---------------------------------------------------------------------------------------
 		--
@@ -122,8 +126,8 @@ AS (
 	LEFT JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid
 	LEFT JOIN mabusinessactionerror bae ON bae.businessactionid = ba.businessactionid
 	LEFT JOIN costore s ON s.storeid = ba.storeid
-	LEFT JOIN searchdata ON searchdata.documentnumbers [1] != 'CHANGE ME'
-		OR searchdata.invoicenumbers [1] != 'CHANGE ME'
+	LEFT JOIN searchdata ON searchdata.documentnumbers [1] != 'CHANGE_ME'
+		OR searchdata.invoicenumbers [1] != 'CHANGE_ME'
 	WHERE ba.STATUS IN (2, 4)
 		AND (
 			s.istraining = false
@@ -756,7 +760,7 @@ AS (
 	GROUP BY businessactionid
 	)
 SELECT ba.documentnumber AS docnumber,
-    ba.invoicenumber AS invoicenumber,
+	ba.invoicenumber AS invoicenumber,
 	ba.doctype AS documenttype,
 	ba.errorstatus AS STATUS,
 	ba.docdate AS DATE,
