@@ -110,6 +110,19 @@ AS (
 		documenttype,
 		s.storename
 	),
+paymentinfo
+AS (
+	SELECT ba.businessactionid,
+		count(cip.commoninvoicepaymentid) AS mopcount,
+		sum(cip.amount) AS mopamount,
+		array_agg(cip.description) AS mopdescriptionsarr,
+		string_agg(cip.description, '') AS mopdescriptionsstr,
+		array_agg(cip.amount) AS mopamountarr
+	FROM maedata ba
+	INNER JOIN cocommoninvoice ci ON ci.invoicenumber::VARCHAR = ba.invoicenumber
+	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
+	GROUP BY ba.businessactionid
+	),
 schedacctnotvalidar
 AS (
 	SELECT ma.businessactionid
@@ -357,18 +370,13 @@ AS (
 invalidgldealandinvoice
 AS (
 	SELECT b.businessactionid
-	FROM mabusinessaction b
-	LEFT JOIN sadealfinalization df ON df.dealfinalizationid = b.documentid
-	LEFT JOIN papartinvoice p ON p.partinvoiceid = b.documentid
+	FROM maedata b
+	LEFT JOIN sadealfinalization df ON df.dealfinalizationid = b.rawdocumentid
+	LEFT JOIN papartinvoice p ON p.partinvoiceid = b.rawdocumentid
 		AND p.invoicetype NOT IN (2, 3)
-	INNER JOIN cocommoninvoice c ON c.documentid = df.dealid
-		OR c.documentid = p.partinvoiceid
-		OR c.commoninvoiceid = b.documentid
-	INNER JOIN cocommoninvoicepayment ci ON ci.commoninvoiceid = c.commoninvoiceid
-	INNER JOIN comethodofpayment mop ON mop.methodofpaymentid = ci.methodofpaymentid
-	WHERE b.STATUS = 2
-		AND ci.description = ''
-		AND mop.description = ''
+	INNER JOIN paymentinfo pi ON pi.businessactionid = b.businessactionid
+	WHERE b.rawSTATUS = 2
+		AND pi.mopdescriptionsstr = ''
 	GROUP BY b.businessactionid
 	),
 invalidglclaimsubmission
@@ -437,21 +445,20 @@ AS (
 taxidpartinvoice1
 AS (
 	SELECT ba.businessactionid
-	FROM mabusinessaction ba
-	INNER JOIN papartinvoice pi ON pi.partinvoiceid = ba.documentid
+	FROM maedata ba
+	INNER JOIN papartinvoice pi ON pi.partinvoiceid = ba.rawdocumentid
 	INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
 	INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
 	LEFT JOIN cotax t ON t.taxid = pite.taxentityid
 	LEFT JOIN cotax t1 ON t1.taxcategoryid = piti.taxcategoryid
 	INNER JOIN cotaxcategory ct ON ct.taxcategoryid = piti.taxcategoryid
-	WHERE ba.STATUS = 2
-		AND t1.taxid <> t.taxid
-		AND t1.description = t.description
-		AND t1.taxid <> pite.taxentityid
-		AND ct.taxcategoryid = t1.taxcategoryid
-		OR (
-			ba.STATUS = 2
-			AND pite.taxentityid IS NULL
+	WHERE ba.rawSTATUS = 2
+		AND (
+			t1.taxid <> t.taxid
+			AND t1.description = t.description
+			AND t1.taxid <> pite.taxentityid
+			AND ct.taxcategoryid = t1.taxcategoryid
+			OR pite.taxentityid IS NULL
 			)
 	GROUP BY partinvoicetaxentityid,
 		ba.businessactionid
@@ -487,7 +494,7 @@ AS (
 	LEFT JOIN sadealunit x1 ON x1.dealunitid = mu.dealunitid
 	INNER JOIN sadeal d ON d.dealid = x.dealid
 	INNER JOIN sadealfinalization df ON df.dealid = d.dealid
-	INNER JOIN mabusinessaction ba ON ba.businessactionid = df.dealfinalizationid
+	INNER JOIN maedata ba ON ba.rawbusinessactionid = df.dealfinalizationid
 	WHERE mu.STATE = 2
 		AND (
 			x.dealunitid != 0
@@ -495,16 +502,16 @@ AS (
 			)
 		AND d.STATE = 5
 		AND x1.dealunitid IS NULL
-		AND ba.STATUS = 2
+		AND ba.rawSTATUS = 2
 	GROUP BY ba.businessactionid
 	),
 tradedealid
 AS (
 	SELECT businessactionid
-	FROM mabusinessaction ba
-	LEFT JOIN sadealtrade dt ON dt.dealtradeid = ba.documentid
-	WHERE ba.STATUS = 2
-		AND documenttype = 3007
+	FROM maedata ba
+	LEFT JOIN sadealtrade dt ON dt.dealtradeid = ba.rawdocumentid
+	WHERE ba.rawSTATUS = 2
+		AND ba.rawdocumenttype = 3007
 		AND dt.dealtradeid IS NULL
 	),
 oobdupepartinvoice
@@ -514,73 +521,60 @@ AS (
 	INNER JOIN papartinvoice i ON h.partinvoiceid = i.partinvoiceid
 	INNER JOIN papartinvoiceline il ON h.partinvoicelineid = il.partinvoicelineid
 	LEFT JOIN paspecialorder so ON so.partinvoiceid = h.partinvoiceid
-	INNER JOIN mabusinessaction ba ON ba.documentid = h.partinvoiceid
+	INNER JOIN maedata ba ON ba.rawdocumentid = h.partinvoiceid
 	WHERE il.partinvoiceid <> h.partinvoiceid
-		AND ba.STATUS = 2
+		AND ba.rawSTATUS = 2
 	),
 oobmissingdiscountpartinvoice
 AS (
-	SELECT businessactionid
-	FROM (
-		SELECT ba.businessactionid
-		FROM papartinvoiceline pi
+	SELECT ba.businessactionid
+	FROM papartinvoiceline pi
+	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
+	INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
+	INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
+	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
+	INNER JOIN (
+		SELECT pi.partinvoiceid
+		FROM papartinvoice pi
 		INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
-		INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
-		INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
-		INNER JOIN mabusinessaction ba ON ba.documentid = pi.partinvoiceid
 		INNER JOIN (
-			SELECT pi.partinvoiceid
-			FROM papartinvoice pi
-			INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
-			INNER JOIN (
-				SELECT SUM((qtyspecialorder * adjustmentprice) / 10000) AS amt,
-					partinvoiceid
-				FROM papartinvoiceline
-				GROUP BY partinvoiceid
-				) soamt ON soamt.partinvoiceid = pi.partinvoiceid
-			WHERE pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
-			) v1 ON v1.partinvoiceid = pi.partinvoiceid
-		INNER JOIN (
-			SELECT SUM(debitamt - creditamt) AS oob,
-				bai.businessactionid
-			FROM mabusinessactionitem bai
-			INNER JOIN mabusinessaction ba ON ba.businessactionid = bai.businessactionid
-			WHERE ba.documenttype = 1001
-				AND ba.STATUS = 2
-			GROUP BY bai.businessactionid
-			) oob ON oob.businessactionid = ba.businessactionid
-		INNER JOIN (
-			SELECT SUM(depositapplied) AS applied,
+			SELECT SUM((qtyspecialorder * adjustmentprice) / 10000) AS amt,
 				partinvoiceid
 			FROM papartinvoiceline
 			GROUP BY partinvoiceid
-			) dep ON dep.partinvoiceid = pi.partinvoiceid
+			) soamt ON soamt.partinvoiceid = pi.partinvoiceid
+		WHERE pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
+		) v1 ON v1.partinvoiceid = pi.partinvoiceid
+	INNER JOIN (
+		SELECT SUM(depositapplied) AS applied,
+			partinvoiceid
+		FROM papartinvoiceline
+		GROUP BY partinvoiceid
+		) dep ON dep.partinvoiceid = pi.partinvoiceid
+	INNER JOIN (
+		SELECT pi.partinvoiceid
+		FROM papartinvoice pi
+		INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
 		INNER JOIN (
-			SELECT pi.partinvoiceid
-			FROM papartinvoice pi
-			INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
-			INNER JOIN (
-				SELECT sum((qtyspecialorder * adjustmentprice) / 10000) AS amt,
-					partinvoiceid
-				FROM papartinvoiceline
-				GROUP BY partinvoiceid
-				) soamt ON soamt.partinvoiceid = pi.partinvoiceid
-				AND pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
-			) soa ON soa.partinvoiceid = pi.partinvoiceid
-		INNER JOIN papartinvoice pin ON pi.partinvoiceid = pin.partinvoiceid
-		INNER JOIN cosaletype st ON st.saletypeid = pin.handlingsaletypeid
-		WHERE ba.documenttype = 1001
-			AND ba.STATUS = 2
-			AND dep.applied <> oob.oob
-			AND CASE 
-				WHEN st.usagecode = 7
-					AND pin.invoicehandlingamt + pin.specialorderhandling != 0
-					THEN 0
-				ELSE 1
-				END = 1
-		GROUP BY ba.businessactionid
-		) data
-	GROUP BY businessactionid
+			SELECT sum((qtyspecialorder * adjustmentprice) / 10000) AS amt,
+				partinvoiceid
+			FROM papartinvoiceline
+			GROUP BY partinvoiceid
+			) soamt ON soamt.partinvoiceid = pi.partinvoiceid
+			AND pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
+		) soa ON soa.partinvoiceid = pi.partinvoiceid
+	INNER JOIN papartinvoice pin ON pi.partinvoiceid = pin.partinvoiceid
+	INNER JOIN cosaletype st ON st.saletypeid = pin.handlingsaletypeid
+	WHERE ba.rawdocumenttype = 1001
+		AND ba.rawSTATUS = 2
+		AND dep.applied <> ba.oobamt
+		AND CASE 
+			WHEN st.usagecode = 7
+				AND pin.invoicehandlingamt + pin.specialorderhandling != 0
+				THEN 0
+			ELSE 1
+			END = 1
+	GROUP BY ba.businessactionid
 	),
 oobnonpaypartinvoice
 AS (
