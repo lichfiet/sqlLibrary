@@ -87,6 +87,7 @@ AS (
 			ELSE 'Out of Balance!'
 			END AS oob,
 		left(string_agg(errortext, ''), 70) || '...' AS txt,
+		string_agg(errortext, '') as rawtxt,
 		ba.STATUS AS rawstatus,
 		ba.businessactionid AS rawbusinessactionid,
 		ba.storeid AS rawstoreid,
@@ -126,13 +127,13 @@ AS (
 schedacctnotvalidar
 AS (
 	SELECT ma.businessactionid
-	FROM mabusinessaction ma
-	INNER JOIN mabusinessactionitem mai using (businessactionid)
+	FROM maedata ma
 	INNER JOIN cocommoninvoice ci ON ci.invoicenumber::TEXT = ma.invoicenumber::TEXT
 	INNER JOIN cocommoninvoicepayment cip using (commoninvoiceid)
 	INNER JOIN comethodofpayment mop ON mop.methodofpaymentid = cip.methodofpaymentid
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = mop.glacct
-	WHERE STATUS = 2
+	WHERE ma.rawSTATUS = 2
+	    AND ma.rawtxt ilike '%Not Valid%'
 		AND coa.schedule = 0
 		AND cip.arcustomerid <> 0
 	GROUP BY ma.businessactionid
@@ -603,12 +604,11 @@ AS (
 armopinternalinvoice
 AS (
 	SELECT ba.businessactionid
-	FROM mabusinessaction ba
-	INNER JOIN mabusinessactionerror bae using (businessactionid)
-	INNER JOIN papartinvoice pi ON pi.partinvoiceid = ba.documentid
+	FROM maedata ba
+	INNER JOIN papartinvoice pi ON pi.partinvoiceid = ba.rawdocumentid
 	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = pi.commoninvoiceid
-	WHERE ba.STATUS = 2
-		AND bae.errortext ilike 'No A/R Customer for Method of Payment %'
+	WHERE ba.rawSTATUS = 2
+		AND ba.rawtxt ilike 'No A/R Customer for Method of Payment %'
 		AND pi.invoicetype = 1
 		AND pi.majorunitid != 0
 		AND cip.amount = 0
@@ -692,14 +692,16 @@ AS (
 	SELECT b.businessactionid
 	FROM sadeal A
 	INNER JOIN sadealfinalization df ON df.dealid = a.dealid
-	INNER JOIN mabusinessaction B ON b.documentid = df.dealfinalizationid
-	INNER JOIN cocommoninvoicepayment C ON C.commoninvoiceid = df.commoninvoiceid
-	WHERE B.STATUS = 2
+	INNER JOIN maedata b ON b.rawdocumentid = df.dealfinalizationid
+	INNER JOIN paymentinfo p ON p.businessactionid = b.businessactionid
+	WHERE B.rawSTATUS = 2
 	GROUP BY a.balancetofinance,
-		c.commoninvoicepaymentid,
-		b.businessactionid
-	HAVING count(C.commoninvoicepaymentid) = 1
-		AND c.amount != a.balancetofinance
+		p.businessactionid,
+		b.businessactionid,
+		p.mopcount,
+		p.mopamount
+	HAVING p.mopcount = 1
+		AND p.mopamount != a.balancetofinance
 	),
 taxroundingrepairorder -- heavily modified 13501 NOT VERIFIED TO WORK yet 
 AS (
@@ -709,8 +711,8 @@ AS (
 		FROM serepairordertaxentity e
 		INNER JOIN serepairordertaxitem i ON e.repairordertaxitemid = i.repairordertaxitemid
 		INNER JOIN serepairorder ro ON ro.repairorderid = i.repairorderid
-		INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
-		WHERE ba.STATUS = 2
+		INNER JOIN maedata ba ON ba.rawdocumentid = ro.repairorderid
+		WHERE ba.rawSTATUS = 2
 		GROUP BY ba.businessactionid,
 			i.repairordertaxitemid
 		HAVING i.taxamount != ROUND(SUM(e.taxamount), - 2)
