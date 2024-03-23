@@ -93,15 +93,22 @@ AS (
 		ba.documentid AS rawdocumentid,
 		ba.documentdate AS rawdocumentdate,
 		ba.documenttype AS rawdocumenttype,
-		ba.storeid
+		ba.storeid,
+		s.storename
 	FROM mabusinessaction ba
 	LEFT JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid
 	LEFT JOIN mabusinessactionerror bae ON bae.businessactionid = ba.businessactionid
+	LEFT JOIN costore s ON s.storeid = ba.storeid
 	WHERE ba.STATUS IN (2, 4)
+		AND (
+			s.istraining = false
+			OR s.storeid IS NULL
+			)
 	GROUP BY ba.businessactionid,
 		documentnumber,
 		STATUS,
-		documenttype
+		documenttype,
+		s.storename
 	),
 schedacctnotvalidar
 AS (
@@ -721,7 +728,7 @@ SELECT ba.documentnumber AS docnumber,
 	ba.doctype AS documenttype,
 	ba.errorstatus AS STATUS,
 	ba.docdate AS DATE,
-	s.storename || ', Id:' || s.storeid::VARCHAR AS storeandstoreid,
+	ba.storename || ', Id:' || ba.rawstoreid::VARCHAR AS storeandstoreid,
 	ba.rawdocumentid AS documentid,
 	CASE 
 		WHEN ba.storeid = 0
@@ -868,7 +875,6 @@ SELECT ba.documentnumber AS docnumber,
 		END AS balancestate,
 	ba.txt AS errormessage
 FROM maedata ba
-LEFT JOIN costore s ON s.storeid = ba.storeid
 LEFT JOIN erroraccropart earop ON earop.businessactionid = ba.businessactionid -- EVO-26911 RO Part with Bad Categoryid
 LEFT JOIN erroraccrolabor earol ON earol.businessactionid = ba.businessactionid -- EVO-18036 RO Labor with Bad Categoryid
 LEFT JOIN erroraccrolabor2 earol2 ON earol2.businessactionid = ba.businessactionid -- EVO-18036 RO Labor with Bad Categoryid
@@ -903,5 +909,5 @@ LEFT JOIN oobwrongmopamountrepairorder ON oobwrongmopamountrepairorder.businessa
 LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.businessactionid -- EVO-31125
 LEFT JOIN taxroundingrepairorder ON taxroundingrepairorder.businessactionid = ba.businessactionid
 WHERE ba.rawSTATUS IN (2, 4)
-ORDER BY s.storename ASC,
+ORDER BY ba.storename ASC,
 	ba.rawdocumentdate DESC
