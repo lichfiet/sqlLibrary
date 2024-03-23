@@ -141,14 +141,14 @@ AS (
 miscinvnonarmop
 AS (
 	SELECT ma.businessactionid
-	FROM mabusinessaction ma
+	FROM maedata ma
 	INNER JOIN mabusinessactionitem mai using (businessactionid)
 	INNER JOIN cocommoninvoice ci ON ci.invoicenumber::TEXT = ma.invoicenumber::TEXT
 	INNER JOIN cocommoninvoicepayment cip using (commoninvoiceid)
 	INNER JOIN comiscreceipttype mrt ON mrt.glacct = mai.accountid
 	INNER JOIN pamiscinvoice mi ON mi.miscrectype = mrt.miscreceipttypeid
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = mai.accountid
-	WHERE STATUS = 2
+	WHERE rawSTATUS = 2
 		AND coa.schedule = 0
 		AND mi.arcustomerid > 0
 	GROUP BY ma.businessactionid
@@ -177,10 +177,10 @@ AS (
 				) AS num,
 			ba.businessactionid AS errorid
 		FROM maedata ba
-		INNER JOIN mabusinessaction ba1 USING (documentnumber)
+		INNER JOIN maedata ba1 USING (documentnumber)
 		WHERE ba.rawSTATUS = 2
 			AND ba.rawdocumenttype = 3006
-			AND ba1.documenttype = 3001
+			AND ba1.rawdocumenttype = 3001
 			AND ba1.invoicenumber < ba.invoicenumber
 			AND ba.rawstoreid = ba1.storeid
 		) DUMP ON bi.businessactionid = DUMP.businessactionid
@@ -224,22 +224,22 @@ AS (
 	INNER JOIN serepairorder ro ON ro.repairorderid = rou.repairorderid
 	INNER JOIN cocategory badcat ON badcat.categoryid = rol.categoryid
 		AND badcat.storeid != rol.storeid
-	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
-	WHERE ba.STATUS = 2
+	INNER JOIN maedata ba ON ba.rawdocumentid = ro.repairorderid
+	WHERE ba.rawstatus = 2
 	GROUP BY businessactionid
 	),
 erroraccrolabor2
 AS (
 	SELECT ba.businessactionid -- this one probably needs a different CR but it has to do with the warranty company having a diff storeid for freight
 	FROM serepairorder ro
-	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
+	INNER JOIN maedata ba ON ba.rawdocumentid = ro.repairorderid
 	INNER JOIN serepairorderunit rou ON rou.repairorderid = ro.repairorderid
 	INNER JOIN serepairorderjob roj ON roj.repairorderunitid = rou.repairorderunitid
 	INNER JOIN sewarrantyclaim wc ON wc.repairorderjobid = roj.repairorderjobid
 	INNER JOIN cowarrantycompany warrcom ON warrcom.warrantycompanyid = wc.warrantycompanyid
 	INNER JOIN cocategory currcat ON currcat.categoryid = warrcom.freightcategoryid
 		AND currcat.storeid != warrcom.storeid
-	WHERE ba.STATUS = 2
+	WHERE ba.rawstatus = 2
 	GROUP BY ba.businessactionid
 	),
 erroraccmiscsaletype
@@ -248,18 +248,18 @@ AS (
 	FROM serepairorder ro
 	INNER JOIN cosaletype st ON st.saletypeid = ro.miscitemsaletypeid
 		AND ro.storeid != st.storeid
-	INNER JOIN mabusinessaction ba ON ba.STATUS = 2
-		AND ba.documentid = ro.repairorderid
+	INNER JOIN maedata ba ON ba.rawstatus = 2
+		AND ba.rawdocumentid = ro.repairorderid
 	GROUP BY ba.businessactionid
 	),
 erroraccpicat
 AS (
 	SELECT ba.businessactionid
-	FROM mabusinessaction ba
-	INNER JOIN papartinvoiceline pi ON pi.partinvoiceid = ba.documentid
+	FROM maedata ba
+	INNER JOIN papartinvoiceline pi ON pi.partinvoiceid = ba.rawdocumentid
 	INNER JOIN cocategory c ON c.categoryid = pi.categoryid
 		AND c.storeid != pi.storeid
-	WHERE ba.STATUS = 2
+	WHERE ba.rawstatus = 2
 	GROUP BY ba.businessactionid
 	),
 erroraccreceivepart
@@ -269,10 +269,10 @@ AS (
 		SELECT ba.businessactionid
 		FROM papartadjustment pa
 		INNER JOIN pareceivingdocument rd ON rd.receivingdocumentid = pa.receivingdocumentid
-		LEFT JOIN mabusinessaction ba ON ba.documentid = rd.receivingdocumentid
+		LEFT JOIN maedata ba ON ba.rawdocumentid = rd.receivingdocumentid
 		INNER JOIN cocategory c ON pa.categoryid = c.categoryid
-		WHERE ba.STATUS = 2
-			AND ba.documentid IS NOT NULL
+		WHERE ba.rawstatus = 2
+			AND ba.rawdocumentid IS NOT NULL
 			AND c.storeid != pa.storeid
 		GROUP BY ba.businessactionid
 		
@@ -284,8 +284,8 @@ AS (
 		INNER JOIN pareceivingdocument rd ON ph.receivingdocumentid = rd.receivingdocumentid
 		INNER JOIN papartshipment ps ON ps.partshipmentid = ph.partshipmentid
 		INNER JOIN papart p ON p.partid = ph.partid
-		INNER JOIN mabusinessaction ba ON rd.receivingdocumentid = ba.documentid
-		WHERE ba.STATUS = 2
+		INNER JOIN maedata ba ON rd.receivingdocumentid = ba.rawdocumentid
+		WHERE ba.rawstatus = 2
 			AND (
 				rd.storeid != p.storeid
 				OR rd.storeidluid != p.storeidluid
@@ -300,10 +300,10 @@ AS (
 	FROM papartinvoiceline pil
 	INNER JOIN papartinvoice pi ON pi.partinvoiceid = pil.partinvoiceid
 	INNER JOIN cocategory c ON c.categoryid = pil.categoryid
-	INNER JOIN mabusinessaction ba ON ba.documentid = pil.partinvoiceid
+	INNER JOIN maedata ba ON ba.rawdocumentid = pil.partinvoiceid
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = c.glinventory
 	WHERE coa.schedule != 0
-		AND ba.STATUS = 2
+		AND ba.rawstatus = 2
 	GROUP BY ba.businessactionid
 	
 	UNION
@@ -312,10 +312,10 @@ AS (
 	FROM papartadjustment pa
 	INNER JOIN pareceivingdocument rd ON rd.receivingdocumentid = pa.receivingdocumentid
 	INNER JOIN cocategory c ON c.categoryid = pa.categoryid
-	INNER JOIN mabusinessaction ba ON ba.documentid = rd.receivingdocumentid
+	INNER JOIN maedata ba ON ba.rawdocumentid = rd.receivingdocumentid
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = c.glinventory
 	WHERE coa.schedule != 0
-		AND ba.STATUS = 2
+		AND ba.rawstatus = 2
 	GROUP BY ba.businessactionid
 	
 	UNION
@@ -327,9 +327,9 @@ AS (
 	INNER JOIN serepairorder ro ON ro.repairorderid = rou.repairorderid
 	INNER JOIN cocategory c ON c.categoryid = rop.categoryid
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = c.glinventory
-	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
+	INNER JOIN maedata ba ON ba.rawdocumentid = ro.repairorderid
 	WHERE coa.schedule != 0
-		AND ba.STATUS = 2
+		AND ba.rawstatus = 2
 	GROUP BY ba.businessactionid
 	),
 subletcloseoutscheduledmu
@@ -340,20 +340,20 @@ AS (
 	INNER JOIN serepairorderjob roj ON roj.repairorderjobid = rs.repairorderjobid
 	INNER JOIN cocategory c ON c.categoryid = sc.categoryid
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = c.glinventory
-	INNER JOIN mabusinessaction ba ON ba.documentid = sc.subletcloseoutid
+	INNER JOIN maedata ba ON ba.rawdocumentid = sc.subletcloseoutid
 	WHERE coa.schedule != 0
-		AND ba.STATUS = 2
+		AND ba.rawstatus = 2
 	GROUP BY ba.businessactionid
 	),
 analysispending
 AS (
 	SELECT ba.businessactionid
 	FROM papartadjustment pa
-	INNER JOIN mabusinessaction ba ON ba.documentid = pa.receivingdocumentid
+	INNER JOIN maedata ba ON ba.rawdocumentid = pa.receivingdocumentid
 	LEFT JOIN papartshipment ps ON ps.partshipmentid = pa.partshipmentid
 	WHERE ps.partshipmentid IS NULL
-		AND ba.STATUS = 4
-		AND ba.documenttype = 1007
+		AND ba.rawstatus = 4
+		AND ba.rawdocumenttype = 1007
 	),
 invalidglnonpayro
 AS (
@@ -362,10 +362,10 @@ AS (
 	INNER JOIN serepairorderunit rou using (repairorderunitid)
 	INNER JOIN serepairorder ro using (repairorderid)
 	INNER JOIN cosaletype st ON st.saletypeid = roj.saletypeid
-	INNER JOIN mabusinessaction ma ON ma.documentid = ro.repairorderid
+	INNER JOIN maedata ma ON ma.rawdocumentid = ro.repairorderid
 	WHERE isnonpayjob = 1
 		AND st.usagecode NOT IN (5, 7)
-		AND ma.STATUS = 2
+		AND ma.rawstatus = 2
 	GROUP BY ma.businessactionid
 	),
 invalidgldealandinvoice
@@ -383,15 +383,15 @@ AS (
 invalidglclaimsubmission
 AS (
 	SELECT ba.businessactionid AS businessactionid
-	FROM mabusinessaction ba
-	INNER JOIN sewarrantysubmissioncredit wsc ON wsc.warrantysubmissioncreditid = ba.documentid
+	FROM maedata ba
+	INNER JOIN sewarrantysubmissioncredit wsc ON wsc.warrantysubmissioncreditid = ba.rawdocumentid
 	INNER JOIN sewarrantyclaimcredit using (warrantysubmissioncreditid)
 	INNER JOIN sewarrantyclaim using (warrantyclaimid)
 	INNER JOIN serepairorderjob roj using (repairorderjobid)
 	INNER JOIN cosaletype st ON st.saletypeid = roj.saletypeid
-	WHERE ba.STATUS = 2
+	WHERE ba.rawstatus = 2
 		AND st.usagecode = 5
-		AND ba.documenttype = 2003
+		AND ba.rawdocumenttype = 2003
 		AND roj.warrantycompanyid <> wsc.warrantycompanyid
 	GROUP BY ba.businessactionid
 	),
@@ -402,12 +402,12 @@ AS (
 	INNER JOIN rerentalpostingtax rpt ON rpt.rentalpostingtaxid = rptd.rentalpostingtaxid
 	INNER JOIN rerentalpostingitem rpi ON rpi.rentalpostingid = rpt.rentalpostingid
 	INNER JOIN rerentalposting rp ON rp.rentalpostingid = rpi.rentalpostingid
-	INNER JOIN mabusinessaction ba ON ba.documentnumber = rp.documentnumber
+	INNER JOIN maedata ba ON ba.documentnumber = rp.documentnumber
 	INNER JOIN cotaxcategory tc ON tc.taxcategorydescription = rpt.description
 		AND tc.storeid = rpt.storeid
 	INNER JOIN cotax t ON t.taxcategoryid = tc.taxcategoryid
 	LEFT JOIN cotax t2 ON t2.taxid = rptd.taxentityid
-	WHERE ba.STATUS = 2
+	WHERE ba.rawstatus = 2
 		AND t2.taxid IS NULL
 	GROUP BY ba.businessactionid
 	),
@@ -421,10 +421,10 @@ AS (
 	INNER JOIN sadealunit du ON du.dealunitid = dut.dealunitid
 	INNER JOIN sadeal d ON d.dealid = du.dealid
 	INNER JOIN sadealfinalization f ON f.dealid = d.dealid
-	INNER JOIN mabusinessaction ba ON ba.documentid = f.dealfinalizationid
+	INNER JOIN maedata ba ON ba.rawdocumentid = f.dealfinalizationid
 	WHERE t.taxid IS NULL
 		AND tc.storeid = dut.storeid
-		AND ba.STATUS = 2
+		AND ba.rawstatus = 2
 	GROUP BY ba.businessactionid
 	),
 taxiddeal2 -- verified it works on two deals
@@ -438,8 +438,8 @@ AS (
 		AND t1.storeid = dut.storeid
 	INNER JOIN cotaxcategory tc ON tc.taxcategoryid = t1.taxcategoryid
 	INNER JOIN sadealfinalization df ON df.dealid = d.dealid
-	INNER JOIN mabusinessaction ba ON ba.documentid = df.dealfinalizationid
-	WHERE ba.STATUS = 2
+	INNER JOIN maedata ba ON ba.rawdocumentid = df.dealfinalizationid
+	WHERE ba.rawstatus = 2
 		AND t.storeid <> d.storeid
 	GROUP BY ba.businessactionid
 	),
@@ -469,9 +469,9 @@ AS (
 	SELECT ba.businessactionid
 	FROM sadealadjustmenttax dat
 	INNER JOIN sadealadjustment da ON da.dealadjustmentid = dat.dealadjustmentid
-	INNER JOIN mabusinessaction ba ON ba.documentid = da.dealadjustmentid
+	INNER JOIN maedata ba ON ba.rawdocumentid = da.dealadjustmentid
 	INNER JOIN maedata errortext ON errortext.businessactionid = ba.businessactionid
-	WHERE ba.STATUS = 2
+	WHERE ba.rawstatus = 2
 		AND errortext.txt ilike '%Tax Entity not rounded%'
 	GROUP BY ba.businessactionid
 	
@@ -481,9 +481,9 @@ AS (
 	FROM rerentalpostingtaxdetail rptd
 	INNER JOIN rerentalpostingtax rpt ON rpt.rentalpostingtaxid = rptd.rentalpostingtaxid
 	INNER JOIN rerentalposting rp ON rp.rentalpostingid = rpt.rentalpostingid
-	INNER JOIN mabusinessaction ba ON ba.documentid = rp.rentalpostingid
+	INNER JOIN maedata ba ON ba.rawdocumentid = rp.rentalpostingid
 	INNER JOIN maedata errortext ON errortext.businessactionid = ba.businessactionid
-	WHERE ba.STATUS = 2
+	WHERE ba.rawstatus = 2
 		AND errortext.txt ilike '%Tax Entity not rounded%'
 	GROUP BY ba.businessactionid
 	),
@@ -594,10 +594,10 @@ AS (
 	FROM papartinvoice pi
 	INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
 	INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
-	INNER JOIN mabusinessaction ba ON ba.invoicenumber = pi.partinvoicenumber::TEXT
+	INNER JOIN maedata ba ON ba.invoicenumber = pi.partinvoicenumber::TEXT
 	INNER JOIN maedata ON maedata.businessactionid = ba.businessactionid -- Join on the OOB cte so we can validate fixing this fixes the oob amount
-	WHERE ba.documenttype = 1001
-		AND ba.STATUS = 2
+	WHERE ba.rawdocumenttype = 1001
+		AND ba.rawstatus = 2
 		AND (piti.taxamount - pite.taxamount) = maedata.oobamt
 	GROUP BY ba.businessactionid
 	),
@@ -653,8 +653,8 @@ AS (
 	INNER JOIN cocommoninvoice ci ON ci.commoninvoiceid = cip.commoninvoiceid
 	INNER JOIN serepairorder ro ON ro.repairorderid = ci.documentid
 	INNER JOIN serototals rt ON rt.roid = ro.repairorderid
-	INNER JOIN mabusinessaction ba ON ba.documentid = ro.repairorderid
-	WHERE ba.STATUS = 2
+	INNER JOIN maedata ba ON ba.rawdocumentid = ro.repairorderid
+	WHERE ba.rawstatus = 2
 		AND ro.storeid = ba.storeid
 	GROUP BY roid,
 		ba.businessactionid
