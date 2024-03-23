@@ -1,7 +1,29 @@
-WITH maedata
+WITH searchdata
+AS (
+	SELECT
+		-- INSTRUCTIONS
+		---------------------------------------------------------------------------------------
+		--
+		-- 	Replace the Change Me with one or more document numbers in a comma separated list,
+		--  you can do this with either the document numbers (the first [CHANGE ME]) or you,
+		--  can search using invoice numbers (the second [CHANGE ME]). Leaving them as is will
+		--  search for all management activities
+		--
+		---------------------------------------------------------------------------------------
+		--
+		-- SEARCH BY DOCUMENTNUMBER
+		ARRAY ['CHANGE ME'] AS documentnumbers,
+		--
+		-- SEARCH BY INVOICE NUMBER
+		ARRAY ['CHANGE ME'] AS invoicenumbers
+		--
+		---------------------------------------------------------------------------------------
+		--
+	),
+maedata
 AS (
 	SELECT ba.businessactionid,
-		documentnumber,
+		ba.documentnumber,
 		ba.invoicenumber,
 		CASE documenttype
 			WHEN 1001
@@ -87,7 +109,7 @@ AS (
 			ELSE 'Out of Balance!'
 			END AS oob,
 		left(string_agg(errortext, ''), 70) || '...' AS txt,
-		string_agg(errortext, '') as rawtxt,
+		string_agg(errortext, '') AS rawtxt,
 		ba.STATUS AS rawstatus,
 		ba.businessactionid AS rawbusinessactionid,
 		ba.storeid AS rawstoreid,
@@ -100,11 +122,24 @@ AS (
 	LEFT JOIN mabusinessactionitem bai ON bai.businessactionid = ba.businessactionid
 	LEFT JOIN mabusinessactionerror bae ON bae.businessactionid = ba.businessactionid
 	LEFT JOIN costore s ON s.storeid = ba.storeid
+	LEFT JOIN searchdata ON searchdata.documentnumbers [1] != 'CHANGE ME'
+		OR searchdata.invoicenumbers [1] != 'CHANGE ME'
 	WHERE ba.STATUS IN (2, 4)
 		AND (
 			s.istraining = false
 			OR s.storeid IS NULL
 			)
+		AND (
+			CASE 
+				WHEN searchdata.documentnumbers IS NOT NULL
+					AND ba.documentnumber::VARCHAR = ANY (searchdata.documentnumbers)
+					OR ba.invoicenumber::VARCHAR = ANY (searchdata.invoicenumbers)
+					THEN 1
+				WHEN searchdata.documentnumbers IS NULL
+					THEN 1
+				ELSE 0
+				END
+			) = 1
 	GROUP BY ba.businessactionid,
 		documentnumber,
 		STATUS,
@@ -133,7 +168,7 @@ AS (
 	INNER JOIN comethodofpayment mop ON mop.methodofpaymentid = cip.methodofpaymentid
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = mop.glacct
 	WHERE ma.rawSTATUS = 2
-	    AND ma.rawtxt ilike '%Not Valid%'
+		AND ma.rawtxt ilike '%Not Valid%'
 		AND coa.schedule = 0
 		AND cip.arcustomerid <> 0
 	GROUP BY ma.businessactionid
@@ -721,6 +756,7 @@ AS (
 	GROUP BY businessactionid
 	)
 SELECT ba.documentnumber AS docnumber,
+    ba.invoicenumber AS invoicenumber,
 	ba.doctype AS documenttype,
 	ba.errorstatus AS STATUS,
 	ba.docdate AS DATE,
