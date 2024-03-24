@@ -54,7 +54,68 @@ LEFT JOIN (
 WHERE cc.conscount != da.avgcount
 	AND a.accts IS NOT NULL
 ORDER BY da.avgcount - cc.conscount DESC;
-
+--
+--
+-- Acct In Wrong Dept (Experimentl)
+WITH deptorder
+AS (
+	SELECT
+	    ntile(4) OVER (PARTITION BY coa.accountingid, coa.deptid ORDER BY sequencenumber) AS quartile,
+		-- start dept ranks
+		lag(depts.deptrank, 1) OVER (
+			PARTITION BY coa.accountingid ORDER BY sequencenumber ASC
+			) AS prevdept,
+		depts.deptrank AS dept,
+		lag(depts.deptrank, - 1) OVER (
+			PARTITION BY coa.accountingid ORDER BY sequencenumber ASC
+			) AS nextdept,
+		-- start dept codes
+		lag(deptcode, 1) OVER (
+			PARTITION BY coa.accountingid ORDER BY sequencenumber ASC
+			) AS prevdeptcode,
+		deptcode AS deptcode,
+		lag(deptcode, - 1) OVER (
+			PARTITION BY coa.accountingid ORDER BY sequencenumber ASC
+			) AS nextdeptcode,
+		--
+		coa.acctdeptid
+	FROM glchartofaccounts coa
+	INNER JOIN (
+		SELECT coa.accountingid,
+			d.deptcode,
+			row_number() OVER (
+				PARTITION BY coa.accountingid ORDER BY avg(sequencenumber)
+				) AS deptrank,
+			coa.deptid
+		FROM glchartofaccounts coa
+		INNER JOIN gldepartment d ON d.departmentsid = coa.deptid
+		GROUP BY coa.deptid,
+			coa.accountingid,
+			d.deptcode
+		) depts ON depts.deptid = coa.deptid
+		AND coa.accountingid = depts.accountingid
+	)
+SELECT coa.accountingid,
+	'Account: (' || coa.acctdept || ')' AS acctnumber,
+	'Seq #: ' || coa.sequencenumber::VARCHAR AS seqnumber,
+	'Department: (' || d.deptcode || ')' AS department,
+	'(' || COALESCE(d.prevdeptcode::VARCHAR, 'N/A') || ', ' || COALESCE(d.deptcode::VARCHAR, 'N/A') || ', ' || COALESCE(d.nextdeptcode::VARCHAR, 'N/A') || ')' AS prevcurrnextcode,
+	'(' || COALESCE(d.prevdept::VARCHAR, 'N/A') || ', ' || COALESCE(d.dept::VARCHAR, 'N/A') || ', ' || COALESCE(d.nextdept::VARCHAR, 'N/A') || ')' AS prevcurrnextrank,
+	CASE 
+		WHEN d.prevdept > d.dept
+			THEN 'Account too low'
+		WHEN d.nextdept < d.dept
+			THEN 'Account too high'
+		ELSE 'N/A'
+		END AS fix,
+		d.quartile
+FROM glchartofaccounts coa
+INNER JOIN deptorder d ON d.acctdeptid = coa.acctdeptid
+WHERE (
+		-- Account above or below is in a diff dept that should be above or below
+		d.prevdept > d.dept
+		OR d.nextdept < d.dept
+		);
 --
 -- Level greater than 9 on account (Causes COA to be unable to calculate. Numbers greater than 9 can be used but it's not advised) 
 SELECT 'Account # ' || coa.acctdept || ' has a level greater than 9' as description, 
