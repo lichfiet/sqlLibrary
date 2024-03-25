@@ -59,8 +59,8 @@ ORDER BY da.avgcount - cc.conscount DESC;
 -- Acct In Wrong Dept (Experimentl)
 WITH deptorder
 AS (
-	SELECT
-	    ntile(4) OVER (PARTITION BY coa.accountingid, coa.deptid ORDER BY sequencenumber) AS quartile,
+	SELECT ROUND(avg(sequencenumber) OVER (PARTITION BY coa.deptid), 2) AS avgseq,
+		stddev(sequencenumber) OVER (PARTITION BY coa.deptid) AS stddevseq,
 		-- start dept ranks
 		lag(depts.deptrank, 1) OVER (
 			PARTITION BY coa.accountingid ORDER BY sequencenumber ASC
@@ -78,7 +78,8 @@ AS (
 			PARTITION BY coa.accountingid ORDER BY sequencenumber ASC
 			) AS nextdeptcode,
 		--
-		coa.acctdeptid
+		coa.acctdeptid,
+		coa.sequencenumber
 	FROM glchartofaccounts coa
 	INNER JOIN (
 		SELECT coa.accountingid,
@@ -96,25 +97,42 @@ AS (
 		AND coa.accountingid = depts.accountingid
 	)
 SELECT coa.accountingid,
+	store.stores AS store_names,
 	'Account: (' || coa.acctdept || ')' AS acctnumber,
-	'Seq #: ' || coa.sequencenumber::VARCHAR AS seqnumber,
+	'Seq #: ' || coa.sequencenumber::TEXT AS seqnumber,
 	'Department: (' || d.deptcode || ')' AS department,
-	'(' || COALESCE(d.prevdeptcode::VARCHAR, 'N/A') || ', ' || COALESCE(d.deptcode::VARCHAR, 'N/A') || ', ' || COALESCE(d.nextdeptcode::VARCHAR, 'N/A') || ')' AS prevcurrnextcode,
-	'(' || COALESCE(d.prevdept::VARCHAR, 'N/A') || ', ' || COALESCE(d.dept::VARCHAR, 'N/A') || ', ' || COALESCE(d.nextdept::VARCHAR, 'N/A') || ')' AS prevcurrnextrank,
+	Round(((d.sequencenumber - d.avgseq) / stddevseq), 2) AS std_deviations_from_mean,
 	CASE 
-		WHEN d.prevdept > d.dept
+		WHEN Round(((d.sequencenumber - d.avgseq) / stddevseq), 2) > 1.7
 			THEN 'Account too low'
-		WHEN d.nextdept < d.dept
+		WHEN Round(((d.sequencenumber - d.avgseq) / stddevseq), 2) < 1.7
 			THEN 'Account too high'
 		ELSE 'N/A'
-		END AS fix,
-		d.quartile
+		END AS to_fix,
+	'(' || COALESCE(d.prevdeptcode::VARCHAR, 'N/A') || ', ' || COALESCE(d.deptcode::VARCHAR, 'N/A') || ', ' || COALESCE(d.nextdeptcode::VARCHAR, 'N/A') || ')' AS prevcurrnextcode,
+	'(' || COALESCE(d.prevdept::VARCHAR, 'N/A') || ', ' || COALESCE(d.dept::VARCHAR, 'N/A') || ', ' || COALESCE(d.nextdept::VARCHAR, 'N/A') || ')' AS prevcurrnextrank,
+	Round(d.avgseq, 2) AS avg_department_sequence,
+	ROUND(d.stddevseq, 2) AS std_deviation
 FROM glchartofaccounts coa
 INNER JOIN deptorder d ON d.acctdeptid = coa.acctdeptid
-WHERE (
-		-- Account above or below is in a diff dept that should be above or below
-		d.prevdept > d.dept
-		OR d.nextdept < d.dept
+INNER JOIN (
+	SELECT CASE 
+			WHEN Length(LEFT(string_agg(storename, ', '), 20)) > 17
+				THEN LEFT(string_agg(storename, ', '), 20) || '...'
+			ELSE LEFT(string_agg(storename, ', '), 20)
+			END AS stores,
+		sm.parentstoreid AS accountingid
+	FROM costore s
+	INNER JOIN costoremap sm ON sm.childstoreid = s.storeid
+	GROUP BY sm.parentstoreid
+	) store ON store.accountingid = coa.accountingid
+WHERE Round((abs(d.sequencenumber - d.avgseq) / stddevseq), 2) > 2 -- where is 2 standard deviations from the mean or more
+	OR (
+		Round((abs(d.sequencenumber - d.avgseq) / stddevseq), 2) > 1.7 -- where is 1.7 standard deviations from the mean and account above or below is in a diff department
+		AND (
+			d.prevdept > d.dept
+			OR d.nextdept < d.dept
+			)
 		);
 --
 -- Level greater than 9 on account (Causes COA to be unable to calculate. Numbers greater than 9 can be used but it's not advised) 
