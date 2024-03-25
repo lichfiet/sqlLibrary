@@ -16,7 +16,7 @@ AS (
 	SELECT
 		--
 		-- SEARCH BY DOCUMENTNUMBER
-		ARRAY ['CHANGE_ME'] AS documentnumbers,
+		ARRAY ['189521'] AS documentnumbers,
 		--
 		-- SEARCH BY INVOICE NUMBER
 		ARRAY ['CHANGE_ME'] AS invoicenumbers
@@ -567,54 +567,67 @@ AS (
 	),
 oobmissingdiscountpartinvoice
 AS (
-	SELECT ba.businessactionid
-	FROM papartinvoiceline pi
-	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
-	INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
-	INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
-	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
-	INNER JOIN (
-		SELECT pi.partinvoiceid
-		FROM papartinvoice pi
+	SELECT businessactionid
+	FROM (
+		SELECT ba.businessactionid
+		FROM papartinvoiceline pi
 		INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
+		INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
+		INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
+		INNER JOIN mabusinessaction ba ON ba.documentid = pi.partinvoiceid
 		INNER JOIN (
-			SELECT SUM((qtyspecialorder * adjustmentprice) / 10000) AS amt,
+			SELECT pi.partinvoiceid
+			FROM papartinvoice pi
+			INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
+			INNER JOIN (
+				SELECT SUM((qtyspecialorder * adjustmentprice) / 10000) AS amt,
+					partinvoiceid
+				FROM papartinvoiceline
+				GROUP BY partinvoiceid
+				) soamt ON soamt.partinvoiceid = pi.partinvoiceid
+			WHERE pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
+			) v1 ON v1.partinvoiceid = pi.partinvoiceid
+		INNER JOIN (
+			SELECT SUM(debitamt - creditamt) AS oob,
+				bai.businessactionid
+			FROM mabusinessactionitem bai
+			INNER JOIN mabusinessaction ba ON ba.businessactionid = bai.businessactionid
+			WHERE ba.documenttype = 1001
+				AND ba.STATUS = 2
+			GROUP BY bai.businessactionid
+			) oob ON oob.businessactionid = ba.businessactionid
+		INNER JOIN (
+			SELECT SUM(depositapplied) AS applied,
 				partinvoiceid
 			FROM papartinvoiceline
 			GROUP BY partinvoiceid
-			) soamt ON soamt.partinvoiceid = pi.partinvoiceid
-		WHERE pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
-		) v1 ON v1.partinvoiceid = pi.partinvoiceid
-	INNER JOIN (
-		SELECT SUM(depositapplied) AS applied,
-			partinvoiceid
-		FROM papartinvoiceline
-		GROUP BY partinvoiceid
-		) dep ON dep.partinvoiceid = pi.partinvoiceid
-	INNER JOIN (
-		SELECT pi.partinvoiceid
-		FROM papartinvoice pi
-		INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
+			) dep ON dep.partinvoiceid = pi.partinvoiceid
 		INNER JOIN (
-			SELECT sum((qtyspecialorder * adjustmentprice) / 10000) AS amt,
-				partinvoiceid
-			FROM papartinvoiceline
-			GROUP BY partinvoiceid
-			) soamt ON soamt.partinvoiceid = pi.partinvoiceid
-			AND pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
-		) soa ON soa.partinvoiceid = pi.partinvoiceid
-	INNER JOIN papartinvoice pin ON pi.partinvoiceid = pin.partinvoiceid
-	INNER JOIN cosaletype st ON st.saletypeid = pin.handlingsaletypeid
-	WHERE ba.rawdocumenttype = 1001
-		AND ba.rawSTATUS = 2
-		AND dep.applied <> ba.oobamt
-		AND CASE 
-			WHEN st.usagecode = 7
-				AND pin.invoicehandlingamt + pin.specialorderhandling != 0
-				THEN 0
-			ELSE 1
-			END = 1
-	GROUP BY ba.businessactionid
+			SELECT pi.partinvoiceid
+			FROM papartinvoice pi
+			INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
+			INNER JOIN (
+				SELECT sum((qtyspecialorder * adjustmentprice) / 10000) AS amt,
+					partinvoiceid
+				FROM papartinvoiceline
+				GROUP BY partinvoiceid
+				) soamt ON soamt.partinvoiceid = pi.partinvoiceid
+				AND pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
+			) soa ON soa.partinvoiceid = pi.partinvoiceid
+		INNER JOIN papartinvoice pin ON pi.partinvoiceid = pin.partinvoiceid
+		INNER JOIN cosaletype st ON st.saletypeid = pin.handlingsaletypeid
+		WHERE ba.documenttype = 1001
+			AND ba.STATUS = 2
+			AND dep.applied <> oob.oob
+			AND CASE 
+				WHEN st.usagecode = 7
+					AND pin.invoicehandlingamt + pin.specialorderhandling != 0
+					THEN 0
+				ELSE 1
+				END = 1
+		GROUP BY ba.businessactionid
+		) data
+	GROUP BY businessactionid
 	),
 oobnonpaypartinvoice
 AS (
