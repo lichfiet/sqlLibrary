@@ -902,7 +902,7 @@ SELECT ba.documentnumber AS docnumber,
 		ELSE ''
 		END || CASE 
 		WHEN oobwrongmopamountrepairorder.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
-			THEN 'EVO-30796 Repair Order OOB Method of Payment Amount Incorrect | T1 Preapproved'
+			THEN 'EVO-30796 Repair Order OOB Method of Payment Amount Incorrect | T2'
 		ELSE ''
 		END || CASE 
 		WHEN dealoobins.businessactionid IS NOT NULL -- VERIFIED
