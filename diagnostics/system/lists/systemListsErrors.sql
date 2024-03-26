@@ -1,7 +1,24 @@
 WITH storeinfo
 AS (
-	SELECT *
-	FROM costore
+	SELECT co.value AS CMF, -- cmf number 
+		s.storename AS StoreName, -- name of store in store select
+		s.storeid AS StoreID,
+		co2.value AS LocationName, -- shows up in top left of Lightspeed
+		s.storecode AS StoreCode
+	FROM copreference co
+	INNER JOIN costore s ON s.storeid = co.storeid
+	INNER JOIN costoremap sm ON sm.childstoreid = s.storeid
+	LEFT JOIN (
+		SELECT string_agg(s.storename, ', ') OVER (PARTITION BY parentstoreid) AS stores,
+			array_agg(s.storeid) OVER (PARTITION BY parentstoreid) AS storeids,
+			childstoreid
+		FROM costoremap sm
+		INNER JOIN costore s ON s.storeid = sm.childstoreid
+		) otherstores ON otherstores.childstoreid = s.storeid
+	INNER JOIN copreference co2 ON co2.storeidluid = co.storeidluid
+	WHERE co.id = 'shop-DealerID'
+		AND co2.id = 'shop-LocationName'
+	ORDER BY co2.value ASC
 	),
 evo27246
 AS (
