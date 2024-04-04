@@ -107,6 +107,7 @@ AS (
 			END AS errorstatus,
 		to_char(documentdate, 'YYYY / MM / DD') AS docdate,
 		sum(bai.debitamt - creditamt * .0001) AS oobamt,
+		sum(bai.debitamt - creditamt) AS oobamtraw,
 		CASE 
 			WHEN sum(debitamt - creditamt) = 0
 				THEN 'In Balance'
@@ -688,15 +689,13 @@ AS (
 	FROM papartinvoice pi
 	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
 	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
-	INNER JOIN cocommoninvoice ci ON ci.commoninvoiceid = pi.commoninvoiceid
-	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
+	INNER JOIN paymentinfo p on p.businessactionid = ba.businessactionid
 	WHERE ba.rawSTATUS = 2
 		AND pi.invoicetype NOT IN (2, 3)
-		AND ba.oobamt = pit.soldnowsubtotal
-		AND cip.description != ''
-	GROUP BY ba.businessactionid
-	HAVING sum(cip.amount) = 0
-		AND count(cip.commoninvoicepaymentid) > 1
+		AND abs(ba.oobamtraw) = invoicesubtotal
+		AND p.mopdescriptionsstr != ''
+	    AND p.mopamount = 0
+		AND p.mopcount > 1
 	),
 oobwrongmopamountrepairorder
 AS (
