@@ -531,14 +531,16 @@ SELECT h.scheduleidentifier,
 	Round(sum(amtdebit - amtcredit) * .0001, 2) AS bal_amt,
 	CASE 
 		WHEN d.dealid IS NOT NULL
-			THEN 'No deal number associated to dealid/scheduleidentifier: ' || d.dealid
+			THEN 'No deal number associated to dealid/scheduleidentifier: ' || d.dealid || ', if deal is voided, un void and add a customer and dealnumber will populate'
 		ELSE 'dealid/scheduleidentifier does not exist in sadeal table'
 		END AS problem,
-	coalesce(d.STATE::VARCHAR, 'N/A') AS dealstate
+	coalesce(d.STATE::VARCHAR, 'N/A') AS dealstate,
+	string_agg(b.searchname, ', ') AS nameondeal
 FROM glhistory h
 INNER JOIN glchartofaccounts coa ON coa.acctdeptid = h.acctdeptid
 LEFT JOIN sadeal d ON d.dealid = h.scheduleidentifier
 	AND d.storeid = h.locationid
+LEFT JOIN sadealbuyer b ON b.dealid = d.dealid
 WHERE coa.acctdept = '32250'
 	AND coa.schedule = 11
 	AND (
@@ -546,6 +548,7 @@ WHERE coa.acctdept = '32250'
 		OR d.dealnumber = ''
 		)
 GROUP BY h.scheduleidentifier,
-	d.dealid
+	d.dealid,
+	b.dealid
 HAVING sum(amtdebit - amtcredit) != 0;
 
