@@ -555,6 +555,17 @@ AS (
 		AND ba.rawdocumenttype = 3007
 		AND dt.dealtradeid IS NULL
 	),
+mutransferstoreid
+AS (
+	SELECT ba.businessactionid
+	FROM samajorunit mu
+	INNER JOIN samajorunittransfer mut ON mut.majorunitid = mu.majorunitid
+	INNER JOIN maedata ba ON mut.majorunittransferid = ba.rawdocumentid
+	INNER JOIN samajorunitsalescategory musc using (majorunitsalescategoryid)
+	WHERE musc.storeid <> mu.storeid
+		AND mu.STATE = 10
+		AND ba.rawSTATUS = 2
+	),
 oobdupepartinvoice
 AS (
 	SELECT ba.businessactionid
@@ -689,12 +700,12 @@ AS (
 	FROM papartinvoice pi
 	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
 	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
-	INNER JOIN paymentinfo p on p.businessactionid = ba.businessactionid
+	INNER JOIN paymentinfo p ON p.businessactionid = ba.businessactionid
 	WHERE ba.rawSTATUS = 2
 		AND pi.invoicetype NOT IN (2, 3)
 		AND abs(ba.oobamtraw) = invoicesubtotal
 		AND p.mopdescriptionsstr != ''
-	    AND p.mopamount = 0
+		AND p.mopamount = 0
 		AND p.mopcount > 1
 	),
 oobwrongmopamountrepairorder
@@ -908,8 +919,12 @@ SELECT ba.documentnumber AS docnumber,
 			THEN 'EVO-24051 Deal OOB insurance Forces Negative Balance to Finance | T2'
 		ELSE ''
 		END || CASE 
-		WHEN oobwrongamtsalesdeal.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
+		WHEN oobwrongamtsalesdeal.businessactionid IS NOT NULL -- VERIFIED
 			THEN 'EVO-31125 Sales Deal OOB Method of Payment != Balance to Finance | T1 Preapproved'
+		ELSE ''
+		END || CASE 
+		WHEN mutransferstoreid.businessactionid IS NOT NULL -- VERIFIED
+			THEN 'EVO-31390 Major Unit Transfer with Bad MU Sales Category | T2'
 		ELSE ''
 		END || CASE 
 		WHEN taxroundingrepairorder.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
@@ -945,6 +960,7 @@ LEFT JOIN taxiddeal2 ON taxiddeal2.businessactionid = ba.businessactionid -- EVO
 LEFT JOIN taxidpartinvoice1 ON taxidpartinvoice1.businessactionid = ba.businessactionid -- EVO-35995 
 LEFT JOIN tradedealid ON tradedealid.businessactionid = ba.businessactionid -- EVO-22520 Deal Trade MAE with invalid tradedealid
 LEFT JOIN dealunitid1 ON dealunitid1.businessactionid = ba.businessactionid -- EVO-21635 Deal Unit ID linking to invalid dealunit
+LEFT JOIN mutransferstoreid ON mutransferstoreid.businessactionid = ba.businessactionid -- EVO-21635 Deal Unit ID linking to invalid dealunit
 LEFT JOIN dealoobins ON dealoobins.businessactionid = ba.businessactionid -- EVO-24051
 LEFT JOIN oobdupepartinvoice ON oobdupepartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid -- EVO-20828
