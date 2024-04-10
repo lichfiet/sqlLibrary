@@ -524,3 +524,28 @@ ORDER BY SUM(amtdebit - amtcredit) DESC,
 	acctdept ASC;
 
 /* AR Rec Customer invalid will go here */
+
+/* Deal Adjustments */
+SELECT h.scheduleidentifier,
+	string_agg(h.description, ', ') AS descriptions,
+	Round(sum(amtdebit - amtcredit) * .0001, 2) AS bal_amt,
+	CASE 
+		WHEN d.dealid IS NOT NULL
+			THEN 'No deal number associated to dealid/scheduleidentifier: ' || d.dealid
+		ELSE 'dealid/scheduleidentifier does not exist in sadeal table'
+		END AS problem,
+	coalesce(d.STATE::VARCHAR, 'N/A') AS dealstate
+FROM glhistory h
+INNER JOIN glchartofaccounts coa ON coa.acctdeptid = h.acctdeptid
+LEFT JOIN sadeal d ON d.dealid = h.scheduleidentifier
+	AND d.storeid = h.locationid
+WHERE coa.acctdept = '32250'
+	AND coa.schedule = 11
+	AND (
+		d.dealid IS NULL
+		OR d.dealnumber = ''
+		)
+GROUP BY h.scheduleidentifier,
+	d.dealid
+HAVING sum(amtdebit - amtcredit) != 0;
+
