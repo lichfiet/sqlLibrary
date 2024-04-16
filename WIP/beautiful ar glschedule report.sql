@@ -61,14 +61,18 @@ SELECT accountingid,
 		END AS sum_appliedamt
 FROM (
 	SELECT *,
-	    /* */
+		/* */
 		last_value(sum_amount) OVER (
-			PARTITION BY h2.accountingid, h2.locationid, h2.acctdeptid, h2.schedacctid,h2.scheduleidentifier
+			PARTITION BY h2.accountingid,
+			h2.locationid,
+			h2.acctdeptid,
+			h2.schedacctid,
+			h2.scheduleidentifier
 			) AS last_sum_amount
 	FROM (
-		SELECT 
-		    -- GL HIST AND ACCOUNT INFORMATION
-		    h.accountingid,
+		SELECT
+			-- GL HIST AND ACCOUNT INFORMATION
+			h.accountingid,
 			h.locationid,
 			h.acctdeptid,
 			h.schedacctid,
@@ -80,12 +84,17 @@ FROM (
 			h.documentnumber,
 			h.description,
 			-- CUSTOMER INFORMATION
-			COALESCE(cust.searchname, '')       AS customername,
-			COALESCE(cust.customernumber, 0)    AS customernumber,
-			COALESCE(j.journaldescription, '')  AS journaldescription,
-			COALESCE(gl.schedule, 0)            AS schedule,
-			COALESCE(gl.acctdept, '')           AS acctdept,
-			COALESCE(gl.acctdesc, '')           AS acctdesc,
+			COALESCE(cust.searchname, '')              AS customername,
+			COALESCE(cust.customernumber, 0)           AS customernumber,
+			COALESCE(j.journaldescription, '')         AS journaldescription,
+			COALESCE(gl.schedule, 0)                   AS schedule,
+			COALESCE(gl.acctdept, '')                  AS acctdept,
+			COALESCE(gl.acctdesc, '')                  AS acctdesc,
+			CASE h.isconverted
+				WHEN true
+					THEN COALESCE(glsl.docamt, 0)
+				ELSE (h.amtdebit - h.amtcredit)
+				END                                    AS amount,
 			SUM(CASE 
 					WHEN h.isconverted = true
 						THEN COALESCE(glsl.docamt, 0)
@@ -144,8 +153,16 @@ FROM (
 				END AS sum_appliedamt,
 			(
 				ROW_NUMBER() OVER (
-					PARTITION BY h.accountingid, h.locationid, h.acctdeptid, h.schedacctid, h.scheduleidentifier 
-					ORDER BY h.accountingid, h.locationid, h.acctdeptid, h.schedacctid, h.DATE, h.scheduleidentifier
+					PARTITION BY h.accountingid,
+					h.locationid,
+					h.acctdeptid,
+					h.schedacctid,
+					h.scheduleidentifier ORDER BY h.accountingid,
+						h.locationid,
+						h.acctdeptid,
+						h.schedacctid,
+						h.DATE,
+						h.scheduleidentifier
 					)
 				) AS rownumber,
 			h.glhistoryid
@@ -185,5 +202,4 @@ FROM (
 		h2.scheduleidentifier,
 		h2.rownumber
 	) h3
-WHERE last_sum_amount <> sum_appliedamt
-	AND customernumber = '9887';
+WHERE last_sum_amount <> sum_appliedamt;
