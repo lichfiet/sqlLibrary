@@ -59,8 +59,10 @@ SELECT --
 	CASE 
 		WHEN voids.id IS NOT NULL AND docamt != 0
 		    THEN docamt
-		WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = docamt
+		WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = 0
 			THEN 0
+		WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = docamt 
+		    THEN docamt
 		WHEN abs(docamt) - abs(sum(amtpaidthischeck)) <= 0 AND docamt != 0
 			THEN 0
 		WHEN abs(docamt) - abs(sum(amtpaidthischeck)) > 0 AND docamt != 0
@@ -69,7 +71,6 @@ SELECT --
 	END
 	) * .0001, 2)                                                               AS new_remaing_amount,
 	/* Remaining Amount*/ ROUND((sl.remainingamt * .0001), 2)                   AS current_remaining_amount,
-	--
 	/* Text Description */
 	CASE
 	    --
@@ -79,8 +80,12 @@ SELECT --
 			THEN 'No Checks Paid'
 		--
 		-- IF THE SUM OF THE CHECKS = THE ORIGINAL AMOUNT, OR THE INVOICE = 0 AND THERE ARE NO CHECKS (Fully Paid)
-		WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = docamt
+		WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = 0
 			THEN 'Sum of Payments = Original Amt OR There are no payments and Original Amt = 0'
+		--
+		-- IF THE SUM OF THE PAYMENTS = 0 AND THE ORIGINAL AMOUNT != 0
+		WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = docamt AND docamt != 0
+		    THEN 'Sum of Payments = 0 And The Originbal Amount != 0'
 		--
 		-- IF THE SUM OF THE CHECKS ADD UP TO MORE (OR LESS IF NEGATIVE) THAN THE ORIGINAL DOCUMENT AMOUNT (Overpaid)
 		WHEN abs(docamt) - abs(sum(amtpaidthischeck)) < 0
@@ -100,8 +105,10 @@ SELECT --
 	CASE 
 		WHEN voids.id IS NOT NULL AND docamt != 0
 		    THEN 1
-		WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = docamt
+		WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = 0
 			THEN 4
+		WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = docamt AND docamt != 0
+			THEN 1
 		WHEN abs(docamt) - abs(sum(amtpaidthischeck)) <= 0 AND docamt != 0
 			THEN 4
 		WHEN abs(docamt) - abs(sum(amtpaidthischeck)) > 0 AND docamt != 0
@@ -116,8 +123,10 @@ SELECT --
 				    CASE 
 						WHEN voids.id IS NOT NULL AND docamt != 0
 							THEN docamt
-						WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = docamt
+						WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = 0
 							THEN 0
+						WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = docamt AND docamt != 0
+						    THEN docamt
 						WHEN abs(docamt) - abs(sum(amtpaidthischeck)) <= 0 AND docamt != 0
 							THEN 0
 						WHEN abs(docamt) - abs(sum(amtpaidthischeck)) > 0 AND docamt != 0
@@ -137,6 +146,8 @@ SELECT --
 					THEN 0
 				WHEN abs(docamt) - abs(sum(amtpaidthischeck)) <= 0 AND docamt != 0
 					THEN 0
+				WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = docamt AND docamt != 0
+				    THEN docamt
 				WHEN abs(docamt) - abs(sum(amtpaidthischeck)) > 0 AND docamt != 0
 					THEN docamt - sum(amtpaidthischeck)
 				ELSE 0
@@ -160,21 +171,11 @@ LEFT JOIN (
 	GROUP BY il.apinvoiceid,
 		sl.documentnumber
 	/* Whether all checks are voided */
-	HAVING sum(CASE 
-				WHEN ch.voidedflag = 2
-					THEN 1
-				ELSE 0
-				END) = count(il.apinvoiceid)::INT
+	HAVING sum(CASE WHEN ch.voidedflag = 2 THEN 1 ELSE 0 END) = count(il.apinvoiceid)::INT
 	) voids ON voids.id = sl.sltrxid
 INNER JOIN apvendor v ON v.vendorid = sl.acctid
 LEFT JOIN apcheckheader ch ON ch.apcheckheaderid = il.apcheckheaderid
-WHERE (
-		(
-			sltrxstate NOT IN (9)
-			AND ch.voidedflag = 0
-			)
-		OR voids.id IS NOT NULL
-		) -- Makes sure we don't included voided checks in the paid so far sum
+WHERE (( sltrxstate != 9 AND ch.voidedflag = 0 ) OR voids.id IS NOT NULL ) -- Makes sure we don't included voided checks in the paid so far sum
 	--	AND v.vendornumber = 398573
 GROUP BY apinvoiceid,
 	sl.documentnumber,
@@ -185,8 +186,44 @@ GROUP BY apinvoiceid,
 	voids.id,
 	v.name,
 	v.vendornumber
-HAVING sum(amtpaidthischeck) != (docamt - remainingamt)
-	OR voids.id IS NOT NULL
+HAVING (
+    voids.id IS NOT NULL 
+    AND docamt != 0
+    AND (
+		    sl.sltrxstate != 1
+		    OR sl.remainingamt != docamt
+		))
+	OR (
+	    -- fully paid
+	    docamt - coalesce(sum(amtpaidthischeck), 0) = 0
+	    AND (
+	        sl.remainingamt != 0 
+	        OR sl.sltrxstate != 4
+	    ))
+	OR (
+	    -- Over paid
+	    abs(docamt) - abs(sum(amtpaidthischeck)) <= 0 
+	    AND docamt != 0
+	    AND (
+	        sl.remainingamt != 0 
+	        OR sl.sltrxstate != 4
+	    ))
+	OR (
+	    -- Partially Paid
+	    abs(docamt) - abs(sum(amtpaidthischeck)) > 0 
+	    AND docamt != 0
+	    AND (
+	        sl.sltrxstate != 2 
+	        OR sl.remainingamt != docamt - sum(amtpaidthischeck)
+	    ))
+	OR (
+	    -- 0 sum payments
+	    docamt - coalesce(sum(amtpaidthischeck), 0) = docamt
+	    AND docamt != 0
+	    AND (
+	        sl.remainingamt != docamt 
+	        OR sl.sltrxstate != 1
+	    ));
 
 
 -- Output 2
