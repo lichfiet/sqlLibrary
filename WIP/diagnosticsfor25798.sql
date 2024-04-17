@@ -48,115 +48,106 @@
 -- will show you the increase or decrease in ap balance based on what
 -- the invoice's remaining amount should be.
 --
-SELECT v.name,
-	/* Invoice Number */ sl.documentnumber AS invoicenumber,
-	'$' || (
-		0 - ROUND((
-				SUM(sl.remainingamt) OVER (PARTITION BY sl.acctid) - SUM(CASE 
-						WHEN voids.id IS NOT NULL
-							AND docamt != 0
-							THEN ROUND(docamt * .0001, 2)
-						WHEN (docamt - sum(amtpaidthischeck)) <= 0
-							AND docamt != 0
-							THEN 0
-						WHEN (docamt - sum(amtpaidthischeck)) != docamt
-							AND docamt != 0
-							THEN (docamt - sum(amtpaidthischeck))
-						WHEN docamt = 0
-							THEN 0
-						ELSE 0
-						END) OVER (PARTITION BY sl.acctid)
-				) * .0001, 2)
-		)::VARCHAR AS net_vendor_adjustment,
-	/* Net Adjustment Amount */ (
-		0 - (
-			ROUND((sl.remainingamt * .0001), 2) - CASE 
-				WHEN voids.id IS NOT NULL
-					THEN ROUND(docamt * .0001, 2)
-				WHEN ((docamt - sum(amtpaidthischeck)) * .0001) <= 0
-					THEN 0
-				WHEN ((docamt - sum(amtpaidthischeck))) != docamt
-					THEN ROUND(((docamt - sum(amtpaidthischeck)) * .0001), 2)
-				ELSE 0
-				END
-			)
-		) AS net_invoice_adjustment,
-	/* Remaining Amount*/ ROUND((sl.remainingamt * .0001), 2) AS current_remaining_amt,
-	--
-	/* Invoice Amount */ ROUND((sl.docamt * .0001), 2) AS invoice_amount,
-	--
-	/* Paid from Checks */ ROUND(sum(amtpaidthischeck * .0001), 2) AS sum_of_payments,
-	--
+SELECT -- 
+    /* Vendor */'Vendor: #' || v.vendornumber::varchar || ', ' || trim(v.name)  AS vendor,
+	/* Invoice Number */ 'Invoice #: ' || sl.documentnumber                     AS invoice_number,
+	/* Invoice Amount */ '$' || ROUND((sl.docamt * .0001), 2)::varchar          AS invoice_amount,
+	/* Invoice Description */ left(sl.description, 35)                          AS invoice_description,
 	/* Correct Remaing Amount */
+	--
+	ROUND((
 	CASE 
+		WHEN voids.id IS NOT NULL AND docamt != 0
+		    THEN docamt
+		WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = docamt
+			THEN 0
+		WHEN abs(docamt) - abs(sum(amtpaidthischeck)) <= 0 AND docamt != 0
+			THEN 0
+		WHEN abs(docamt) - abs(sum(amtpaidthischeck)) > 0 AND docamt != 0
+			THEN docamt - sum(amtpaidthischeck)
+		ELSE 0
+	END
+	) * .0001, 2)                                                               AS new_remaing_amount,
+	/* Remaining Amount*/ ROUND((sl.remainingamt * .0001), 2)                   AS current_remaining_amount,
+	--
+	/* Text Description */
+	CASE
+	    --
+		-- IF ALL CHECKS ARE VOIDED
 		WHEN voids.id IS NOT NULL
 			AND docamt != 0
-			THEN ROUND(docamt * .0001, 2)
-		WHEN ((docamt - sum(amtpaidthischeck)) * .0001) <= 0
+			THEN 'No Checks Paid'
+		--
+		-- IF THE SUM OF THE CHECKS = THE ORIGINAL AMOUNT, OR THE INVOICE = 0 AND THERE ARE NO CHECKS (Fully Paid)
+		WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = docamt
+			THEN 'Sum of Payments = Original Amt OR There are no payments and Original Amt = 0'
+		--
+		-- IF THE SUM OF THE CHECKS ADD UP TO MORE (OR LESS IF NEGATIVE) THAN THE ORIGINAL DOCUMENT AMOUNT (Overpaid)
+		WHEN abs(docamt) - abs(sum(amtpaidthischeck)) < 0
 			AND docamt != 0
-			THEN 0
-		WHEN ((docamt - sum(amtpaidthischeck))) != docamt
+			THEN 'The checks paid against the invoice add up to more (or less if negative) than the original amount - Overpaid'
+		--
+		-- IF THE SUM OF THE CHECKS ADD UP TO LESS (OR MORE IF NEGATIVE) THAN THE ORIGINAL AMOUNT (Underpaid)
+		WHEN abs(docamt) - abs(sum(amtpaidthischeck)) > 0
 			AND docamt != 0
-			THEN ROUND(((docamt - sum(amtpaidthischeck)) * .0001), 2)
-		WHEN docamt = 0 -- If no payments are made and the invoice = 0, set to paid
-			THEN 0
-		ELSE 0
-		END AS corr_remain,
-	/* */
-	/* Invoice Description */ sl.description,
-	--
+			THEN 'The checks paid against the invoice add up to less (or more if negative) than the original amount - Underpaid'
+		--
+		-- EDGE CASES
+		ELSE 'N/A, No Error Found'
+		END                                                                     AS problem_description,
+	/* Current State */ sl.sltrxstate                                           AS current_state,
 	/* SLTRX State */
 	CASE 
-		WHEN voids.id IS NOT NULL
-			AND docamt != 0 -- if part of the voided checks list
-			THEN 1
-		WHEN ((docamt - sum(amtpaidthischeck)) * .0001) <= 0
-			AND docamt != 0 -- If the sum of payments <= 0
-			THEN 4 --FULLY PAID
-		WHEN ((docamt - sum(amtpaidthischeck)) * .0001) != docamt
-			AND docamt != 0 -- If the sum of payments = part of the invoice amt
-			THEN 2 -- PARTIALLY PAID
-		WHEN ((docamt - sum(amtpaidthischeck)) * .0001) = docamt
-			AND docamt != 0 --- IF the sum of check payments = 0
-			THEN 1 -- UNPAID
-		WHEN docamt = 0 -- If invoice = 0, set to paid
-			THEN 4 -- FULLY PAID
-		ELSE 0 -- Panic if you get a zero
-		END AS newstate,
-	/* */
-	/* Current State */ sl.sltrxstate AS oldstate,
-	/* Text Description */
-	CASE 
-		WHEN voids.id IS NOT NULL
-			AND docamt != 0 -- if part of the voided checks list
-			THEN 'No Checks Paid'
-		WHEN ((docamt - sum(amtpaidthischeck)) * .0001) = 0
-			AND docamt != 0
-			THEN 'Sum of Payments = 0'
-		WHEN ((docamt - sum(amtpaidthischeck)) * .0001) < 0
-			AND docamt != 0 -- If the sum of payments <= 0
-			THEN 'Sum of Payments < 0 - Overpaid' --FULLY PAID
-		WHEN ((docamt - sum(amtpaidthischeck)) * .0001) != docamt
-			AND docamt != 0 -- If the sum of payments = part of the invoice amt
-			THEN 'Sum of Payments != docamt, partially paid' -- PARTIALLY PAID
-		WHEN ((docamt - sum(amtpaidthischeck)) * .0001) = docamt
-			AND docamt != 0 --- IF the sum of check payments = 0
-			THEN 'Sum of Payments = 0 pt. 2' -- UNPAID
-		WHEN docamt = 0 -- If no payments are made and the invoice = 0, set to paid
-			THEN 'Invoice Amt = 0 but not set to paid' -- FULLY PAID
-		ELSE 'N/A' -- Panic if you get a zero
-		END AS change,
-	/* */
-	--
-	CASE 
-		WHEN voids.id IS NOT NULL
-			THEN voids.id
-		ELSE sl.sltrxid
-		END AS identifier,
-	v.vendornumber
+		WHEN voids.id IS NOT NULL AND docamt != 0
+		    THEN 1
+		WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = docamt
+			THEN 4
+		WHEN abs(docamt) - abs(sum(amtpaidthischeck)) <= 0 AND docamt != 0
+			THEN 4
+		WHEN abs(docamt) - abs(sum(amtpaidthischeck)) > 0 AND docamt != 0
+			THEN 2
+	END                                                                         AS new_state,
+	'$' || (
+		0 - ROUND((
+		        --
+				SUM(sl.remainingamt) OVER (PARTITION BY sl.acctid) - SUM(
+				    
+				    -- Determine adjustment per invoice
+				    CASE 
+						WHEN voids.id IS NOT NULL AND docamt != 0
+							THEN docamt
+						WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = docamt
+							THEN 0
+						WHEN abs(docamt) - abs(sum(amtpaidthischeck)) <= 0 AND docamt != 0
+							THEN 0
+						WHEN abs(docamt) - abs(sum(amtpaidthischeck)) > 0 AND docamt != 0
+							THEN docamt - sum(amtpaidthischeck)
+						ELSE 0
+					END
+					
+				    ) OVER (PARTITION BY sl.acctid)
+				) * .0001, 2)
+		)::VARCHAR                                                              AS vendor_adjustment,
+        --
+        -- Invoice Adjustment Amt
+		'$' || (0 - (ROUND(sl.remainingamt - (CASE 
+			WHEN voids.id IS NOT NULL AND docamt != 0
+				THEN (-1 * docamt)
+			WHEN docamt - coalesce(sum(amtpaidthischeck), 0) = docamt
+					THEN 0
+				WHEN abs(docamt) - abs(sum(amtpaidthischeck)) <= 0 AND docamt != 0
+					THEN 0
+				WHEN abs(docamt) - abs(sum(amtpaidthischeck)) > 0 AND docamt != 0
+					THEN docamt - sum(amtpaidthischeck)
+				ELSE 0
+				END
+			) * .0001, 2)))::varchar                                            AS invoice_adjustment,
+	/* Paid So Far */ ROUND(sum(amtpaidthischeck * .0001), 2)                   AS sum_of_payments,
+	/* SLTRX Identifier*/ coalesce(voids.id, sl.sltrxid)                        AS identifier -- If voids.id is null, then return the normal identifier
+--
 --
 FROM apcheckinvoicelist il
-LEFT JOIN glsltransaction sl ON il.apinvoiceid = sl.sltrxid
+RIGHT JOIN glsltransaction sl ON il.apinvoiceid = sl.sltrxid
 LEFT JOIN (
 	SELECT il.apinvoiceid AS id, -- ap invoice id or sltrxid
 		sl.documentnumber
@@ -184,7 +175,7 @@ WHERE (
 			)
 		OR voids.id IS NOT NULL
 		) -- Makes sure we don't included voided checks in the paid so far sum
---	AND v.vendornumber = 398573
+	--	AND v.vendornumber = 398573
 GROUP BY apinvoiceid,
 	sl.documentnumber,
 	sl.description,
@@ -196,7 +187,6 @@ GROUP BY apinvoiceid,
 	v.vendornumber
 HAVING sum(amtpaidthischeck) != (docamt - remainingamt)
 	OR voids.id IS NOT NULL
-	OR (remainingamt = 0 AND sltrxstate != 4);
 
 
 -- Output 2
