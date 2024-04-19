@@ -119,6 +119,7 @@ AS (
 		ba.businessactionid AS rawbusinessactionid,
 		ba.storeid AS rawstoreid,
 		ba.documentid AS rawdocumentid,
+		ba.documentsubid AS rawdocumentsubid,
 		ba.documentdate AS rawdocumentdate,
 		ba.documenttype AS rawdocumenttype,
 		ba.storeid,
@@ -163,6 +164,21 @@ AS (
 	INNER JOIN cocommoninvoice ci ON ci.invoicenumber::VARCHAR = ba.invoicenumber
 	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
 	GROUP BY ba.businessactionid
+	),
+negativedealtax
+AS (
+	SELECT businessactionid
+	FROM sadeal d
+	INNER JOIN sadealunit du using (dealid)
+	INNER JOIN sadealunittax dut using (dealunitid)
+	INNER JOIN sadealfinalization df ON df.dealid = du.dealid
+	INNER JOIN maedata ba ON ba.rawdocumentid = df.dealfinalizationid
+	WHERE dut.taxpct <> 0
+		AND dut.taxableamt <> 0
+		AND dut.taxamt = 0
+		AND ba.rawSTATUS = 2
+	GROUP BY ba.businessactionid, ba.oobamtraw
+	HAVING SUM(ROUND((ROUND(dut.taxableamt::FLOAT / 10000) * (dut.taxpct::FLOAT / 1000000))::NUMERIC * 10000, 0)) != sum(dut.taxamt)
 	),
 schedacctnotvalidar
 AS (
@@ -891,6 +907,10 @@ SELECT ba.documentnumber AS docnumber,
 			THEN 'EVO-20828 Part Invoice OOB Missing Discounts on Lines | T2'
 		ELSE ''
 		END || CASE 
+		WHEN negativedealtax.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
+			THEN 'EVO-18151 Deal OOB By Negative Tax Lines | T1'
+		ELSE ''
+		END || CASE 
 		WHEN oobnonpaypartinvoice.businessactionid IS NOT NULL -- Semi-verified
 			THEN 'EVO-39247 Part Invoice OOB Non-Pay Handling Amt | T2'
 		ELSE ''
@@ -958,6 +978,7 @@ LEFT JOIN longvaltax ON longvaltax.businessactionid = ba.businessactionid -- EVO
 LEFT JOIN taxiddeal1 ON taxiddeal1.businessactionid = ba.businessactionid -- EVO-9836 Deal Unit tax with invalid taxentityid
 LEFT JOIN taxiddeal2 ON taxiddeal2.businessactionid = ba.businessactionid -- EVO-26472 Deal Unit Tax with taxentityid from other store
 LEFT JOIN taxidpartinvoice1 ON taxidpartinvoice1.businessactionid = ba.businessactionid -- EVO-35995 
+LEFT JOIN negativedealtax ON negativedealtax.businessactionid = ba.businessactionid -- EVO-18151 
 LEFT JOIN tradedealid ON tradedealid.businessactionid = ba.businessactionid -- EVO-22520 Deal Trade MAE with invalid tradedealid
 LEFT JOIN dealunitid1 ON dealunitid1.businessactionid = ba.businessactionid -- EVO-21635 Deal Unit ID linking to invalid dealunit
 LEFT JOIN mutransferstoreid ON mutransferstoreid.businessactionid = ba.businessactionid -- EVO-21635 Deal Unit ID linking to invalid dealunit
