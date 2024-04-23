@@ -666,7 +666,7 @@ AS (
 	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
 	WHERE ba.rawSTATUS = 2
 		AND pi.invoicehandlingamt + specialorderhandling != 0
-		AND pi.invoicehandlingamt + specialorderhandling = ba.oobamt
+		AND pi.invoicehandlingamt + specialorderhandling = ba.oobamtraw
 	),
 taxoobpartinvoice -- https://lightspeeddms.atlassian.net/browse/EVO-17198
 AS (
