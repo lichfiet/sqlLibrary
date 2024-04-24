@@ -821,6 +821,20 @@ AS (
 	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
 	INNER JOIN comethodofpayment mop ON mop.arentryoption = 3
 		AND mop.methodofpaymentid = cip.methodofpaymentid
+	),
+extralinevendor
+AS (
+	SELECT ba.businessactionid
+	FROM sadealunitextraline l
+	LEFT JOIN apvendor v ON v.vendorid = l.apvendorid
+	INNER JOIN sadealunit du ON l.dealunitid = du.dealunitid
+	INNER JOIN sadeal d ON d.dealid = du.dealid
+	INNER JOIN sadealfinalization df ON df.dealid = d.dealid
+	INNER JOIN mabusinessaction ba ON ba.documentid = df.dealfinalizationid
+	WHERE v.vendorid IS NULL
+		AND l.apvendorid != 0
+		AND ba.STATUS = 4
+	GROUP BY ba.businessactionid
 	)
 SELECT ba.documentnumber AS document_number,
 	ba.invoicenumber AS invoice_number,
@@ -982,6 +996,10 @@ SELECT ba.documentnumber AS document_number,
 		WHEN taxroundingrepairorder.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
 			THEN 'EVO-13501 Tax Entity not rounded Repair Order | T1 Preapproved'
 		ELSE ''
+		END || CASE 
+		WHEN extralinevendor.businessactionid IS NOT NULL
+			THEN 'EVO-40791 Pending deal, cannot get vendorName, vendorid null | T1, See CR For Details'
+		ELSE ''
 		END AS issue_description_and_cr,
 	CASE 
 		WHEN ba.oobamt != 0
@@ -1027,6 +1045,7 @@ LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.bus
 LEFT JOIN taxroundingrepairorder ON taxroundingrepairorder.businessactionid = ba.businessactionid
 LEFT JOIN rentalmopdealdeposit ON rentalmopdealdeposit.businessactionid = ba.businessactionid -- EVO-41900
 LEFT JOIN dealunitbadsaletype ON dealunitbadsaletype.businessactionid = ba.businessactionid -- EVO-26651
+LEFT JOIN extralinevendor ON extralinevendor.businessactionid = ba.businessactionid -- EVO-40791
 WHERE ba.rawSTATUS IN (2, 4)
 ORDER BY ba.storename ASC,
 	ba.rawdocumentdate DESC;
