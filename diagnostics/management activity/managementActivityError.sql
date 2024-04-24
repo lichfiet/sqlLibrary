@@ -489,16 +489,28 @@ AS (
 	SELECT ba.businessactionid
 	FROM sadeal d
 	INNER JOIN sadealunit du ON du.dealid = d.dealid
+	INNER JOIN cosaletype st ON st.saletypeid = du.saletypeid
+		AND st.storeid = du.storeid
 	INNER JOIN sadealunittax dut ON dut.dealunitid = du.dealunitid
 	INNER JOIN cotax t ON t.taxid = dut.taxentityid
 	INNER JOIN cotax t1 ON t1.description ilike dut.taxdescription
 		AND t1.storeid = dut.storeid
 	INNER JOIN cotaxcategory tc ON tc.taxcategoryid = t1.taxcategoryid
 	INNER JOIN sadealfinalization df ON df.dealid = d.dealid
-	INNER JOIN maedata ba ON ba.rawdocumentid = df.dealfinalizationid
-	WHERE ba.rawstatus = 2
+	INNER JOIN mabusinessaction ba ON ba.documentid = df.dealfinalizationid
+	WHERE ba.STATUS = 2
 		AND t.storeid <> d.storeid
 	GROUP BY ba.businessactionid
+	),
+dealunitbadsaletype
+AS (
+	SELECT ba.businessactionid
+	FROM mabusinessaction ba
+	INNER JOIN sadealfinalization df ON df.dealfinalizationid = ba.documentid
+	INNER JOIN sadeal d ON d.dealid = df.dealid
+	INNER JOIN sadealunit du ON d.dealid = du.dealid
+	INNER JOIN cosaletype st ON st.saletypeid = du.saletypeid
+	WHERE st.storeid <> du.storeid
 	),
 taxidpartinvoice1
 AS (
@@ -873,6 +885,10 @@ SELECT ba.documentnumber AS document_number,
 			THEN 'EVO-29301 Analysis Pending on Part Receiving Document | T1 Preapproved'
 		ELSE ''
 		END || CASE 
+		WHEN dealunitbadsaletype.businessactionid IS NOT NULL -- Analysis Pending On Part Receiving Document
+			THEN 'EVO-26651 Error Accessing Category ID, Bad Saletype on deal | T1 Preapproved'
+		ELSE ''
+		END || CASE 
 		WHEN invalidglnonpayro.businessactionid IS NOT NULL -- Invalid GL For Non-Pay Job on Repair Order
 			THEN 'EVO-34114 Invalid GL Account ID = 0 Non-Pay Repair Order | T2'
 		ELSE ''
@@ -1010,6 +1026,7 @@ LEFT JOIN oobwrongmopamountrepairorder ON oobwrongmopamountrepairorder.businessa
 LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.businessactionid -- EVO-31125
 LEFT JOIN taxroundingrepairorder ON taxroundingrepairorder.businessactionid = ba.businessactionid
 LEFT JOIN rentalmopdealdeposit ON rentalmopdealdeposit.businessactionid = ba.businessactionid -- EVO-41900
+LEFT JOIN dealunitbadsaletype ON dealunitbadsaletype.businessactionid = ba.businessactionid -- EVO-26651
 WHERE ba.rawSTATUS IN (2, 4)
 ORDER BY ba.storename ASC,
 	ba.rawdocumentdate DESC;
