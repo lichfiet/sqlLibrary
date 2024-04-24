@@ -177,7 +177,8 @@ AS (
 		AND dut.taxableamt <> 0
 		AND dut.taxamt = 0
 		AND ba.rawSTATUS = 2
-	GROUP BY ba.businessactionid, ba.oobamtraw
+	GROUP BY ba.businessactionid,
+		ba.oobamtraw
 	HAVING SUM(ROUND((ROUND(dut.taxableamt::FLOAT / 10000) * (dut.taxpct::FLOAT / 1000000))::NUMERIC * 10000, 0)) != sum(dut.taxamt)
 	),
 schedacctnotvalidar
@@ -797,6 +798,17 @@ AS (
 			AND SUM(e.taxamount) != SUM(ROUND(e.taxamount, - 2))
 		) error
 	GROUP BY businessactionid
+	),
+rentalmopdealdeposit
+AS (
+	SELECT ba.businessactionid
+	FROM maedata ba
+	INNER JOIN cocommoninvoice ci ON ba.rawSTATUS = 2 -- ma is in error status
+		AND ba.rawdocumenttype = 3002 -- deal depoosit
+		AND ci.invoicenumber::VARCHAR = ba.invoicenumber
+	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
+	INNER JOIN comethodofpayment mop ON mop.arentryoption = 3
+		AND mop.methodofpaymentid = cip.methodofpaymentid
 	)
 SELECT ba.documentnumber AS docnumber,
 	ba.invoicenumber AS invoicenumber,
@@ -826,6 +838,10 @@ SELECT ba.documentnumber AS docnumber,
 		END || CASE 
 		WHEN earop.businessactionid IS NOT NULL
 			THEN 'EVO-26911 Error Accessing RO Part Category | T2'
+		ELSE ''
+		END || CASE 
+		WHEN rentalmopdealdeposit.businessactionid IS NOT NULL
+			THEN 'EVO-41900 Deal Deposit, No ReservationID For Account XXXX  | T2'
 		ELSE ''
 		END || CASE 
 		WHEN earol.businessactionid IS NOT NULL
@@ -993,6 +1009,7 @@ LEFT JOIN armopinternalinvoice ON armopinternalinvoice.businessactionid = ba.bus
 LEFT JOIN oobwrongmopamountrepairorder ON oobwrongmopamountrepairorder.businessactionid = ba.businessactionid -- EVO-30796 Mop Amount less than Amount to Collect on RO
 LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.businessactionid -- EVO-31125
 LEFT JOIN taxroundingrepairorder ON taxroundingrepairorder.businessactionid = ba.businessactionid
+LEFT JOIN rentalmopdealdeposit ON rentalmopdealdeposit.businessactionid = ba.businessactionid -- EVO-41900
 WHERE ba.rawSTATUS IN (2, 4)
 ORDER BY ba.storename ASC,
-	ba.rawdocumentdate DESC
+	ba.rawdocumentdate DESC;
