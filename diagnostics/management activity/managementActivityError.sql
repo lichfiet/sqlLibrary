@@ -810,8 +810,8 @@ AS (
 	INNER JOIN comethodofpayment mop ON mop.arentryoption = 3
 		AND mop.methodofpaymentid = cip.methodofpaymentid
 	)
-SELECT ba.documentnumber AS docnumber,
-	ba.invoicenumber AS invoicenumber,
+SELECT ba.documentnumber AS document_number,
+	ba.invoicenumber AS invoice_number,
 	ba.doctype AS documenttype,
 	ba.errorstatus AS STATUS,
 	ba.docdate AS DATE,
