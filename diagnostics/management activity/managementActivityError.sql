@@ -389,6 +389,18 @@ AS (
 		AND ba.rawstatus = 2
 	GROUP BY ba.businessactionid
 	),
+partinvoicemubadsaletype
+AS (
+	SELECT ba.businessactionid
+	FROM maedata ba
+	INNER JOIN papartinvoice pi ON ba.rawdocumentid = pi.partinvoiceid
+	INNER JOIN papartinvoiceline pil ON pil.partinvoiceid = pi.partinvoiceid
+	LEFT JOIN cosaletype st ON st.saletypeid = pil.saletypeid
+	LEFT JOIN samajorunitpart mup ON mup.majorunitpartid = pil.referencepartid
+	WHERE ba.rawstatus = 2
+		AND st.usagecode <> 2
+	GROUP BY businessactionid
+	),
 subletcloseoutscheduledmu
 AS (
 	SELECT ba.businessactionid
@@ -896,6 +908,10 @@ SELECT ba.documentnumber AS document_number,
 			THEN 'EVO-14901 Part Category Has MU Scheduled Inventory Account | T2'
 		ELSE ''
 		END || CASE 
+		WHEN partinvoicemubadsaletype.businessactionid IS NOT NULL -- EVO-14158
+			THEN 'EVO-14158 Part Invoice Non Sales Saletype on Internal Invoice | T2'
+		ELSE ''
+		END || CASE 
 		WHEN subletcloseoutscheduledmu.businessactionid IS NOT NULL
 			THEN 'EVO-13300 Sublet Category Has MU Scheduled Inventory Account | T2'
 		ELSE ''
@@ -1056,6 +1072,7 @@ LEFT JOIN taxroundingrepairorder ON taxroundingrepairorder.businessactionid = ba
 LEFT JOIN rentalmopdealdeposit ON rentalmopdealdeposit.businessactionid = ba.businessactionid -- EVO-41900
 LEFT JOIN dealunitbadsaletype ON dealunitbadsaletype.businessactionid = ba.businessactionid -- EVO-26651
 LEFT JOIN extralinevendor ON extralinevendor.businessactionid = ba.businessactionid -- EVO-40791
+LEFT JOIN partinvoicemubadsaletype ON partinvoicemubadsaletype.businessactionid = ba.businessactionid -- EVO-14158
 WHERE ba.rawSTATUS IN (2, 4)
 ORDER BY ba.storename ASC,
 	ba.rawdocumentdate DESC;
