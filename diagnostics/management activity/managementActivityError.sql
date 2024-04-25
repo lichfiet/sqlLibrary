@@ -16,7 +16,7 @@ AS (
 	SELECT
 		--
 		-- SEARCH BY DOCUMENTNUMBER
-		ARRAY ['CHANGE_ME'] AS documentnumbers,
+		ARRAY ['212379'] AS documentnumbers,
 		--
 		-- SEARCH BY INVOICE NUMBER
 		ARRAY ['CHANGE_ME'] AS invoicenumbers
@@ -975,7 +975,7 @@ SELECT ba.documentnumber AS document_number,
 		ELSE ''
 		END || CASE 
 		WHEN oobhandlingpartinvoice.businessactionid IS NOT NULL -- Semi-verified
-			THEN 'EVO-37782 Part Invoice OOB Handling Amt, Customer Taxable | T2'
+			THEN 'EVO-37782 Part Invoice OOB Handling Amt, Not Non-Pay | T2'
 		ELSE ''
 		END || CASE 
 		WHEN oobzerosummoppartinvoice.businessactionid IS NOT NULL
