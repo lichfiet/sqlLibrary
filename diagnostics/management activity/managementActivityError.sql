@@ -876,7 +876,7 @@ SELECT ba.documentnumber AS document_number,
 		ELSE ''
 		END || CASE 
 		WHEN dealarglaccount.businessactionid IS NOT NULL
-			THEN 'EVO-3087 Scheduled Account XXXX Not Valid for A/R Customerid XXXXX Sales Deal | T1 Front End Fix, See CR for info'
+			THEN 'EVO-3087 Scheduled Account XXXX Not Valid for A/R Customerid XXXXX Sales Deal | T1 Front End Fix, See CR for info. May be EVO-30821 but not likely'
 		ELSE ''
 		END || CASE 
 		WHEN earop.businessactionid IS NOT NULL
