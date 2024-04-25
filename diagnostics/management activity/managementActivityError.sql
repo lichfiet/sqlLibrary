@@ -679,9 +679,9 @@ oobnonpaypartinvoice
 AS (
 	SELECT ba.businessactionid
 	FROM papartinvoice pi
+	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
 	INNER JOIN cosaletype st ON st.saletypeid = pi.handlingsaletypeid
 		AND st.usagecode = 7
-	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
 	WHERE ba.rawSTATUS = 2
 		AND pi.invoicehandlingamt + specialorderhandling != 0
 		AND pi.invoicehandlingamt + specialorderhandling = ba.rawoobamt
@@ -690,9 +690,9 @@ oobhandlingpartinvoice
 AS (
 	SELECT ba.businessactionid
 	FROM papartinvoice pi
+	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
 	INNER JOIN cosaletype st ON st.saletypeid = pi.handlingsaletypeid
 		AND st.usagecode != 7
-	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
 	WHERE ba.rawSTATUS = 2
 		AND pi.invoicehandlingamt + specialorderhandling != 0
 		AND pi.invoicehandlingamt + specialorderhandling = ba.rawoobamt
