@@ -16,7 +16,7 @@ AS (
 	SELECT
 		--
 		-- SEARCH BY DOCUMENTNUMBER
-		ARRAY ['212379'] AS documentnumbers,
+		ARRAY ['CHANGE_ME'] AS documentnumbers,
 		--
 		-- SEARCH BY INVOICE NUMBER
 		ARRAY ['CHANGE_ME'] AS invoicenumbers
