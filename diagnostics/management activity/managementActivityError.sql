@@ -399,6 +399,7 @@ AS (
 	LEFT JOIN samajorunitpart mup ON mup.majorunitpartid = pil.referencepartid
 	WHERE ba.rawstatus = 2
 		AND st.usagecode <> 2
+		AND ba.rawtxt ilike '%Invalid Usage Code%'
 	GROUP BY businessactionid
 	),
 subletcloseoutscheduledmu
@@ -622,22 +623,25 @@ oobmissingdiscountpartinvoice
 AS (
 	SELECT businessactionid
 	FROM (
+		WITH soamt AS (
+				SELECT SUM((qtyspecialorder * adjustmentprice) / 10000) AS amt,
+					partinvoiceid
+				FROM maedata d
+				INNER JOIN papartinvoiceline pil ON pil.partinvoiceid = d.rawdocumentid
+				GROUP BY partinvoiceid
+				)
 		SELECT ba.businessactionid
-		FROM papartinvoiceline pi
+		FROM maedata ba
+		INNER JOIN papartinvoiceline pi ON ba.rawdocumentid = pi.partinvoiceid
 		INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
 		INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
 		INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
-		INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
 		INNER JOIN (
 			SELECT pi.partinvoiceid
-			FROM papartinvoice pi
+			FROM maedata d
+			INNER JOIN papartinvoice pi ON pi.partinvoiceid = d.rawdocumentid
 			INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
-			INNER JOIN (
-				SELECT SUM((qtyspecialorder * adjustmentprice) / 10000) AS amt,
-					partinvoiceid
-				FROM papartinvoiceline
-				GROUP BY partinvoiceid
-				) soamt ON soamt.partinvoiceid = pi.partinvoiceid
+			INNER JOIN soamt ON soamt.partinvoiceid = pi.partinvoiceid
 			WHERE pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
 			) v1 ON v1.partinvoiceid = pi.partinvoiceid
 		INNER JOIN (
@@ -650,12 +654,7 @@ AS (
 			SELECT pi.partinvoiceid
 			FROM papartinvoice pi
 			INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
-			INNER JOIN (
-				SELECT sum((qtyspecialorder * adjustmentprice) / 10000) AS amt,
-					partinvoiceid
-				FROM papartinvoiceline
-				GROUP BY partinvoiceid
-				) soamt ON soamt.partinvoiceid = pi.partinvoiceid
+			INNER JOIN soamt ON soamt.partinvoiceid = pi.partinvoiceid
 				AND pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
 			) soa ON soa.partinvoiceid = pi.partinvoiceid
 		INNER JOIN papartinvoice pin ON pi.partinvoiceid = pin.partinvoiceid
@@ -1058,13 +1057,14 @@ LEFT JOIN tradedealid ON tradedealid.businessactionid = ba.businessactionid -- E
 LEFT JOIN dealunitid1 ON dealunitid1.businessactionid = ba.businessactionid -- EVO-21635 Deal Unit ID linking to invalid dealunit
 LEFT JOIN mutransferstoreid ON mutransferstoreid.businessactionid = ba.businessactionid -- EVO-21635 Deal Unit ID linking to invalid dealunit
 LEFT JOIN dealoobins ON dealoobins.businessactionid = ba.businessactionid -- EVO-24051
+LEFT JOIN oobzerosummoppartinvoice ON oobzerosummoppartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN oobdupepartinvoice ON oobdupepartinvoice.businessactionid = ba.businessactionid
-LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid -- EVO-20828
+LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid 
+    AND oobzerosummoppartinvoice.businessactionid IS NULL -- EVO-20828
 LEFT JOIN oobnonpaypartinvoice ON oobnonpaypartinvoice.businessactionid = ba.businessactionid -- EVO-39247
 LEFT JOIN oobhandlingpartinvoice ON oobhandlingpartinvoice.businessactionid = ba.businessactionid -- EVO-37782
 LEFT JOIN taxoobpartinvoice ON taxoobpartinvoice.businessactionid = ba.businessactionid -- EVO-17198 taxes oob compared to tax entity amounts
 LEFT JOIN oobmissingmoppartinvoice ON oobmissingmoppartinvoice.businessactionid = ba.businessactionid
-LEFT JOIN oobzerosummoppartinvoice ON oobzerosummoppartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN armopinternalinvoice ON armopinternalinvoice.businessactionid = ba.businessactionid -- EVO-31066
 LEFT JOIN oobwrongmopamountrepairorder ON oobwrongmopamountrepairorder.businessactionid = ba.businessactionid -- EVO-30796 Mop Amount less than Amount to Collect on RO
 LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.businessactionid -- EVO-31125
