@@ -135,6 +135,34 @@ WHERE Round((abs(d.sequencenumber - d.avgseq) / stddevseq), 2) > 2 -- where is 2
 			)
 		);
 --
+-- Balance sheet account set up in a non-consolidated department
+WITH deptrank
+AS (
+	SELECT coa.accountingid,
+		d.deptcode,
+		row_number() OVER (
+			PARTITION BY coa.accountingid,
+			coa.deptid ORDER BY avg(sequencenumber)
+			) AS deptrank,
+		coa.deptid
+	FROM glchartofaccounts coa
+	INNER JOIN gldepartment d ON d.departmentsid = coa.deptid
+	GROUP BY coa.deptid,
+		coa.accountingid,
+		d.deptcode
+	)
+SELECT 'Balance sheet account set up in non-consolidated department' AS description,
+	coa.acctdept AS account_number,
+	coa.acctdesc AS account_description,
+	dr.deptcode AS department_code,
+	dr.deptrank AS department_order,
+	coa.sequencenumber AS sequence_number
+FROM glchartofaccounts coa
+INNER JOIN deptrank dr ON dr.deptid = coa.deptid
+WHERE dr.deptrank != 1
+	AND coa.profitbalance = 1
+	AND dr.deptcode NOT ilike '%lemco%';
+--
 -- Level greater than 9 on account (Causes COA to be unable to calculate. Numbers greater than 9 can be used but it's not advised) 
 SELECT 'Account # ' || coa.acctdept || ' has a level greater than 9' as description, 
 	coa.acctdeptid,
