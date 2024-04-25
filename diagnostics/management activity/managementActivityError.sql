@@ -509,16 +509,16 @@ AS (
 		AND t1.storeid = dut.storeid
 	INNER JOIN cotaxcategory tc ON tc.taxcategoryid = t1.taxcategoryid
 	INNER JOIN sadealfinalization df ON df.dealid = d.dealid
-	INNER JOIN mabusinessaction ba ON ba.documentid = df.dealfinalizationid
-	WHERE ba.STATUS = 2
+	INNER JOIN maedata ba ON ba.rawdocumentid = df.dealfinalizationid
+	WHERE ba.rawSTATUS = 2
 		AND t.storeid <> d.storeid
 	GROUP BY ba.businessactionid
 	),
 dealunitbadsaletype
 AS (
 	SELECT ba.businessactionid
-	FROM mabusinessaction ba
-	INNER JOIN sadealfinalization df ON df.dealfinalizationid = ba.documentid
+	FROM maedata ba
+	INNER JOIN sadealfinalization df ON df.dealfinalizationid = ba.rawdocumentid
 	INNER JOIN sadeal d ON d.dealid = df.dealid
 	INNER JOIN sadealunit du ON d.dealid = du.dealid
 	INNER JOIN cosaletype st ON st.saletypeid = du.saletypeid
@@ -847,10 +847,10 @@ AS (
 	INNER JOIN sadealunit du ON l.dealunitid = du.dealunitid
 	INNER JOIN sadeal d ON d.dealid = du.dealid
 	INNER JOIN sadealfinalization df ON df.dealid = d.dealid
-	INNER JOIN mabusinessaction ba ON ba.documentid = df.dealfinalizationid
+	INNER JOIN maedata ba ON ba.rawdocumentid = df.dealfinalizationid
 	WHERE v.vendorid IS NULL
 		AND l.apvendorid != 0
-		AND ba.STATUS = 4
+		AND ba.rawSTATUS = 4
 	GROUP BY ba.businessactionid
 	)
 SELECT ba.documentnumber AS document_number,
