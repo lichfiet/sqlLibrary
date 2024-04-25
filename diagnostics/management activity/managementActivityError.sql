@@ -659,18 +659,12 @@ AS (
 			) soa ON soa.partinvoiceid = pi.partinvoiceid
 		INNER JOIN papartinvoice pin ON pi.partinvoiceid = pin.partinvoiceid
 		INNER JOIN cosaletype st ON st.saletypeid = pin.handlingsaletypeid
+		INNER JOIN soamt ON soamt.partinvoiceid = pin.partinvoiceid
 		WHERE ba.rawdocumenttype = 1001
 			AND ba.rawSTATUS = 2
 			AND dep.applied <> ba.rawoobamt
-			AND CASE 
-				WHEN st.usagecode = 7
-					AND pin.invoicehandlingamt + pin.specialorderhandling != 0
-					THEN 0
-				WHEN st.usagecode != 7
-					AND pin.invoicehandlingamt + pin.specialorderhandling = ba.rawoobamt
-					THEN 0
-				ELSE 1
-				END = 1
+			AND pin.invoicehandlingamt + pin.specialorderhandling != (-1 * ba.rawoobamt) -- didn't charge handling
+			AND pin.invoicehandlingamt + pin.specialorderhandling = ba.rawoobamt -- non pay saletype on handling
 		GROUP BY ba.businessactionid
 		) data
 	GROUP BY businessactionid
@@ -695,7 +689,7 @@ AS (
 		AND st.usagecode != 7
 	WHERE ba.rawSTATUS = 2
 		AND pi.invoicehandlingamt + specialorderhandling != 0
-		AND pi.invoicehandlingamt + specialorderhandling = ba.rawoobamt
+		AND pi.invoicehandlingamt + specialorderhandling = (-1 * ba.rawoobamt)
 	),
 taxoobpartinvoice -- https://lightspeeddms.atlassian.net/browse/EVO-17198
 AS (
