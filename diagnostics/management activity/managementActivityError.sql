@@ -704,10 +704,9 @@ AS (
 	INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
 	INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
 	INNER JOIN maedata ba ON ba.invoicenumber = pi.partinvoicenumber::TEXT
-	INNER JOIN maedata ON maedata.businessactionid = ba.businessactionid -- Join on the OOB cte so we can validate fixing this fixes the oob amount
 	WHERE ba.rawdocumenttype = 1001
 		AND ba.rawstatus = 2
-		AND (piti.taxamount - pite.taxamount) = maedata.oobamt
+		AND (piti.taxamount - pite.taxamount) = ba.rawoobamt
 	GROUP BY ba.businessactionid
 	),
 armopinternalinvoice
