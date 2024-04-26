@@ -663,8 +663,7 @@ AS (
 		WHERE ba.rawdocumenttype = 1001
 			AND ba.rawSTATUS = 2
 			AND dep.applied <> ba.rawoobamt
-			AND pin.invoicehandlingamt + pin.specialorderhandling != (-1 * ba.rawoobamt) -- didn't charge handling
-			AND pin.invoicehandlingamt + pin.specialorderhandling = ba.rawoobamt -- non pay saletype on handling
+			AND abs(pin.invoicehandlingamt + pin.specialorderhandling) != abs(ba.rawoobamt) -- didn't charge handling
 		GROUP BY ba.businessactionid
 		) data
 	GROUP BY businessactionid
@@ -689,7 +688,7 @@ AS (
 		AND st.usagecode != 7
 	WHERE ba.rawSTATUS = 2
 		AND pi.invoicehandlingamt + specialorderhandling != 0
-		AND pi.invoicehandlingamt + specialorderhandling = (-1 * ba.rawoobamt)
+		AND abs(pi.invoicehandlingamt + specialorderhandling) = abs(ba.rawoobamt)
 	),
 taxoobpartinvoice -- https://lightspeeddms.atlassian.net/browse/EVO-17198
 AS (
