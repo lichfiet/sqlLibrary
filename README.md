@@ -1,6 +1,7 @@
 ## Commonly Used Diagnostics/Updates
 - [MAE Diagnostic](https://github.com/lichfiet/sqlLibrary/blob/main/diagnostics/management%20activity/managementActivityError.sql)
-- [Accounting Health Check](https://github.com/lichfiet/sqlLibrary/blob/main/diagnostics/management%20activity/managementActivityError.sql)
+- [Accounting Health Check](https://github.com/lichfiet/sqlLibrary/blob/main/diagnostics/accounting/accountingHealthCheck.sql)
+- [Store Information](https://github.com/lichfiet/sqlLibrary/blob/main/tools/storeInformationTool.sql)
 
 # Lightspeed Support SQL Library
 ![](https://media.discordapp.net/attachments/840808308655128576/1168227224982392974/lightpeed.png?ex=6550ff63&is=653e8a63&hm=2a9924ba404099060a87ea491d835f879e23eb9905acaa14275c89e8d72812f0&=)
