@@ -194,20 +194,7 @@ WHERE sl.sltrxid = bob.identifier;
 --
 -- mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm
 --
---
---  .d88888b.           888                      888         .d8888b. 
--- d88P" "Y88b          888                      888        d88P  Y88b
--- 888     888          888                      888             .d88P
--- 888     888 888  888 888888 88888b.  888  888 888888         8888" 
--- 888     888 888  888 888    888 "88b 888  888 888             "Y8b.
--- 888     888 888  888 888    888  888 888  888 888        888    888
--- Y88b. .d88P Y88b 888 Y88b.  888 d88P Y88b 888 Y88b.      Y88b  d88P
---  "Y88888P"   "Y88888  "Y888 88888P"   "Y88888  "Y888      "Y8888P" 
---                             888                                    
---                             888                                    
---                             888                                    
---
--- Voids Invoice with No GL History Info
+-- Voids Invoice with No Payables GL History Info // THIS ONE IS GOOD, SHOULDN'T HAVE ANY PROBLEMS RUNNING
 --
 UPDATE glsltransaction sl
 SET sltrxstate = 9
@@ -216,29 +203,18 @@ FROM (
 	FROM glsltransaction gls
 	INNER JOIN apvendor v ON v.vendorid = gls.acctid
 	LEFT JOIN glhistory h ON h.journalentryid = gls.docrefglid
-	WHERE h.glhistoryid IS NULL
-		AND sltrxstate IN (1, 2)
-		AND v.vendornumber = 1
+	LEFT JOIN glchartofaccounts coa ON coa.acctdeptid = h.acctdeptid
+		WHERE sltrxstate IN (1, 2, 4)
 	GROUP BY gls.sltrxid
-	HAVING count(distinct vendornumber) = 1
-) bob
-WHERE bob.sltrxid = sl.sltrxid
+	HAVING NOT 2 = ANY (array_agg(coa.schedule))
+	    OR array_agg(h.glhistoryid) IS NULL
+	) bob
+WHERE bob.sltrxid = sl.sltrxid;
 
 --
 -- mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm mmmmm
 --
---
---  .d88888b.           888                      888            d8888 
--- d88P" "Y88b          888                      888           d8P888 
--- 888     888          888                      888          d8P 888 
--- 888     888 888  888 888888 88888b.  888  888 888888      d8P  888 
--- 888     888 888  888 888    888 "88b 888  888 888        d88   888 
--- 888     888 888  888 888    888  888 888  888 888        8888888888
--- Y88b. .d88P Y88b 888 Y88b.  888 d88P Y88b 888 Y88b.            888 
---  "Y88888P"   "Y88888  "Y888 88888P"   "Y88888  "Y888           888 
---                             888                                    
---                             888                                    
---                             888                                    
+-- Unsure
 --
 SELECT ps.partshipmentid
 FROM glsltransaction gls
