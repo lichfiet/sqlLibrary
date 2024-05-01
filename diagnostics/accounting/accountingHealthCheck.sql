@@ -163,6 +163,30 @@ WHERE dr.deptrank != 1
 	AND coa.profitbalance = 1
 	AND dr.deptcode NOT ilike '%lemco%';
 --
+-- COA Comparison, account missing from store
+WITH counts
+AS (
+	SELECT count(coa.acctdept),
+		coa.acctdept,
+		1 AS test,
+		avg(sequencenumber) AS seqnum
+	FROM glchartofaccounts coa
+	GROUP BY coa.acctdept
+	),
+average
+AS (
+	SELECT round(avg(count), 0) AS avgcount
+	FROM counts
+	)
+SELECT 'account might be missing from another location, if they have matching chart of accounts' AS description,
+	count,
+	acctdept,
+	avgcount as avgnumofaccountoccurences,
+	round(seqnum, - 2) as avgsequencenum
+FROM counts c
+INNER JOIN average av ON 1 = 1
+WHERE count != avgcount;
+--
 -- Level greater than 9 on account (Causes COA to be unable to calculate. Numbers greater than 9 can be used but it's not advised) 
 SELECT 'Account # ' || coa.acctdept || ' has a level greater than 9' as description, 
 	coa.acctdeptid,
