@@ -668,6 +668,30 @@ AS (
 		) data
 	GROUP BY businessactionid
 	),
+oobdepositapplied
+AS (
+	SELECT businessactionid
+	FROM (
+		SELECT ba.businessactionid
+		FROM papartinvoice pi
+		INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
+		INNER JOIN papartinvoiceline pil ON pil.partinvoiceid = pi.partinvoiceid
+		INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
+		INNER JOIN paspecialorder so ON so.specialorderid IN (pil.specialorderid, pil.layawayid)
+		WHERE ba.rawSTATUS = 2
+			AND (
+				pil.qtypickedup > 0
+				OR pil.qtyspecialorder < 0
+				)
+			AND so.isconversion = false
+			AND pil.dealadjustmentid IS NULL
+		GROUP BY pi.partinvoiceid,
+			pi.partinvoicenumber,
+			ba.businessactionid
+		HAVING SUM(pil.depositapplied) <> MAX(pit.soldnowprepaidamount)
+		) ba
+	GROUP BY businessactionid
+	),
 oobnonpaypartinvoice
 AS (
 	SELECT ba.businessactionid
@@ -965,6 +989,10 @@ SELECT ba.documentnumber AS document_number,
 			THEN 'EVO-20828 Part Invoice OOB Missing Discounts on Lines | T2'
 		ELSE ''
 		END || CASE 
+		WHEN oobdepositapplied.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
+			THEN 'EVO-17384 Part Invoice OOB Deposit Applied OOB | T1'
+		ELSE ''
+		END || CASE 
 		WHEN negativedealtax.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
 			THEN 'EVO-18151 Deal OOB By Negative Tax Lines | T1'
 		ELSE ''
@@ -1051,9 +1079,10 @@ LEFT JOIN mutransferstoreid ON mutransferstoreid.businessactionid = ba.businessa
 LEFT JOIN dealoobins ON dealoobins.businessactionid = ba.businessactionid -- EVO-24051
 LEFT JOIN oobzerosummoppartinvoice ON oobzerosummoppartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN oobdupepartinvoice ON oobdupepartinvoice.businessactionid = ba.businessactionid
-LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid 
-    AND oobzerosummoppartinvoice.businessactionid IS NULL -- EVO-20828
+LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid
+	AND oobzerosummoppartinvoice.businessactionid IS NULL -- EVO-20828
 LEFT JOIN oobnonpaypartinvoice ON oobnonpaypartinvoice.businessactionid = ba.businessactionid -- EVO-39247
+LEFT JOIN oobdepositapplied ON oobdepositapplied.businessactionid = ba.businessactionid -- EVO-17384
 LEFT JOIN oobhandlingpartinvoice ON oobhandlingpartinvoice.businessactionid = ba.businessactionid -- EVO-37782
 LEFT JOIN taxoobpartinvoice ON taxoobpartinvoice.businessactionid = ba.businessactionid -- EVO-17198 taxes oob compared to tax entity amounts
 LEFT JOIN oobmissingmoppartinvoice ON oobmissingmoppartinvoice.businessactionid = ba.businessactionid
