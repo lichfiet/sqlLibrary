@@ -40,7 +40,7 @@ FROM (
     	INNER JOIN apcheckheader ch ON ch.apcheckheaderid = il.apcheckheaderid -- join on checkheader to see the check states
     	INNER JOIN glsltransaction sl ON sl.sltrxid = il.apinvoiceid -- join to reference the glsl info (remaining amounts and whatnot)
     	WHERE sl.docamt != sl.remainingamt -- Where remaining amount != the invoice amount already
-    		AND sltrxstate NOT IN (9, 4) -- Not voided or already paid
+    		AND sltrxstate != 9 -- Not voided
     		AND sl.accttype = 2 -- Is an ap invoice
     	GROUP BY il.apinvoiceid,
     		sl.documentnumber
@@ -49,7 +49,7 @@ FROM (
     INNER JOIN apvendor v ON v.vendorid = sl.acctid
     LEFT JOIN apcheckheader ch ON ch.apcheckheaderid = il.apcheckheaderid
     WHERE (( sltrxstate != 9 AND ch.voidedflag = 0 ) OR voids.id IS NOT NULL ) -- Makes sure we don't included voided checks in the paid so far sum
-    --	AND v.vendornumber = 278167
+    	AND v.vendornumber = 247700
     GROUP BY apinvoiceid, sl.documentnumber, sl.description,
     	sl.docamt, sl.remainingamt, sl.sltrxid, voids.id,
     	v.name, v.vendornumber
