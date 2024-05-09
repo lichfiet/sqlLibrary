@@ -515,6 +515,19 @@ AS (
 		AND t.storeid <> d.storeid
 	GROUP BY ba.businessactionid
 	),
+dealtaxroundpenny
+AS (
+	SELECT ba.businessactionid
+	FROM sadealunittax dut
+	INNER JOIN sadealunit du USING (dealunitid)
+	INNER JOIN sadeal d USING (dealid)
+	INNER JOIN sadealfinalization df ON df.dealid = d.dealid
+	INNER JOIN maedata ba ON ba.rawdocumentid = df.dealfinalizationid
+	WHERE ba.rawSTATUS = 2
+		AND dut.storeid = d.storeid
+		AND taxpct > 0
+		AND abs(dut.taxamt) = (ROUND((((((dut.taxableamt) * (dut.taxpct::FLOAT / 1000000))) * 1)::INT) * 0.01) * 100) + 100
+	),
 dealunitbadsaletype
 AS (
 	SELECT ba.businessactionid
@@ -980,6 +993,10 @@ SELECT ba.documentnumber AS document_number,
 			THEN 'EVO-26472 Error Updating Accounting | T1 Preapproved'
 		ELSE ''
 		END || CASE 
+		WHEN dealtaxroundpenny.businessactionid IS NOT NULL -- deal out of balance by a penny due to tax rounding
+			THEN 'EVO-17784 Deal Not Rounded by Penny | T2, SQL in CR'
+		ELSE ''
+		END || CASE 
 		WHEN taxidpartinvoice1.businessactionid IS NOT NULL -- part invoice tax entity with bad taxentityid https://lightspeeddms.atlassian.net/browse/EVO-35995
 			THEN 'EVO-35995 Could Not Locate Tax Entity XXX | T2'
 		ELSE ''
@@ -1086,6 +1103,7 @@ LEFT JOIN taxidrental ON taxidrental.businessactionid = ba.businessactionid -- E
 LEFT JOIN longvaltax ON longvaltax.businessactionid = ba.businessactionid -- EVO-37225 long val tax not rounded
 LEFT JOIN taxiddeal1 ON taxiddeal1.businessactionid = ba.businessactionid -- EVO-9836 Deal Unit tax with invalid taxentityid
 LEFT JOIN taxiddeal2 ON taxiddeal2.businessactionid = ba.businessactionid -- EVO-26472 Deal Unit Tax with taxentityid from other store
+LEFT JOIN dealtaxroundpenny ON dealtaxroundpenny.businessactionid = ba.businessactionid -- EVO-17784
 LEFT JOIN taxidpartinvoice1 ON taxidpartinvoice1.businessactionid = ba.businessactionid -- EVO-35995 
 LEFT JOIN negativedealtax ON negativedealtax.businessactionid = ba.businessactionid -- EVO-18151 
 LEFT JOIN tradedealid ON tradedealid.businessactionid = ba.businessactionid -- EVO-22520 Deal Trade MAE with invalid tradedealid
