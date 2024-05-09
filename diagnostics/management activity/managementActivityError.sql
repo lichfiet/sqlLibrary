@@ -692,6 +692,17 @@ AS (
 		) ba
 	GROUP BY businessactionid
 	),
+oobdepositappliedpenny
+AS (
+	SELECT ba.businessactionid
+	FROM papartinvoice pi
+	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
+	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
+	INNER JOIN papartinvoiceline pil ON pil.partinvoiceid = pi.partinvoiceid
+	GROUP BY ba.businessactionid
+	HAVING @(SUM(pil.depositapplied) - MAX(pit.soldnowprepaidamount)) BETWEEN 100
+			AND 500
+	),
 oobnonpaypartinvoice
 AS (
 	SELECT ba.businessactionid
@@ -990,7 +1001,11 @@ SELECT ba.documentnumber AS document_number,
 		ELSE ''
 		END || CASE 
 		WHEN oobdepositapplied.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
-			THEN 'EVO-17384 Part Invoice OOB Deposit Applied OOB | T1'
+			THEN 'EVO-17384 Part Invoice OOB Deposit Applied | T1'
+		ELSE ''
+		END || CASE 
+		WHEN oobdepositappliedpenny.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
+			THEN 'EVO-20339 Part Invoice OOB Deposit Applied By A Penny | T1'
 		ELSE ''
 		END || CASE 
 		WHEN negativedealtax.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
@@ -1083,6 +1098,7 @@ LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.busines
 	AND oobzerosummoppartinvoice.businessactionid IS NULL -- EVO-20828
 LEFT JOIN oobnonpaypartinvoice ON oobnonpaypartinvoice.businessactionid = ba.businessactionid -- EVO-39247
 LEFT JOIN oobdepositapplied ON oobdepositapplied.businessactionid = ba.businessactionid -- EVO-17384
+LEFT JOIN oobdepositappliedpenny ON oobdepositappliedpenny.businessactionid = ba.businessactionid -- EVO-20339
 LEFT JOIN oobhandlingpartinvoice ON oobhandlingpartinvoice.businessactionid = ba.businessactionid -- EVO-37782
 LEFT JOIN taxoobpartinvoice ON taxoobpartinvoice.businessactionid = ba.businessactionid -- EVO-17198 taxes oob compared to tax entity amounts
 LEFT JOIN oobmissingmoppartinvoice ON oobmissingmoppartinvoice.businessactionid = ba.businessactionid
