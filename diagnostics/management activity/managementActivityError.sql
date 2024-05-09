@@ -769,6 +769,16 @@ AS (
 		AND cip.amount = 0
 	GROUP BY ba.businessactionid
 	),
+oobmissingmopccmapping
+AS (
+	SELECT ba.businessactionid
+	FROM maedata ba
+	INNER JOIN paymentinfo cip ON cip.businessactionid = ba.businessactionid
+	INNER JOIN cocreditcardtransaction ct ON ct.documentid = ba.rawdocumentid
+	WHERE cip.mopdescriptionsstr = ''
+		AND cip.mopamount != 0
+		AND ba.rawstatus = 2
+	),
 oobmissingmoppartinvoice
 AS (
 	SELECT ba.businessactionid
@@ -1067,6 +1077,10 @@ SELECT ba.documentnumber AS document_number,
 			THEN 'EVO-39505 Invoice OOB paid with Blank Method of Payment 0$ | T2'
 		ELSE ''
 		END || CASE 
+		WHEN oobmissingmopccmapping.businessactionid IS NOT NULL
+			THEN 'EVO-38574 Invalid GL Account ID = 0, CC Mop Bad System Preferences Mapping | T2'
+		ELSE ''
+		END || CASE 
 		WHEN oobwrongmopamountrepairorder.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
 			THEN 'EVO-30796 Repair Order OOB Method of Payment Amount Incorrect | T2'
 		ELSE ''
@@ -1134,11 +1148,13 @@ LEFT JOIN oobdepositapplied ON oobdepositapplied.businessactionid = ba.businessa
 LEFT JOIN oobdepositappliedpenny ON oobdepositappliedpenny.businessactionid = ba.businessactionid -- EVO-20339
 LEFT JOIN oobhandlingpartinvoice ON oobhandlingpartinvoice.businessactionid = ba.businessactionid -- EVO-37782
 LEFT JOIN taxoobpartinvoice ON taxoobpartinvoice.businessactionid = ba.businessactionid -- EVO-17198 taxes oob compared to tax entity amounts
+LEFT JOIN oobmissingmopccmapping ON oobmissingmopccmapping.businessactionid = ba.businessactionid -- EVO-38574
 LEFT JOIN oobmissingmoppartinvoice ON oobmissingmoppartinvoice.businessactionid = ba.businessactionid
 LEFT JOIN armopinternalinvoice ON armopinternalinvoice.businessactionid = ba.businessactionid -- EVO-31066
 LEFT JOIN oobwrongmopamountrepairorder ON oobwrongmopamountrepairorder.businessactionid = ba.businessactionid -- EVO-30796 Mop Amount less than Amount to Collect on RO
 LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.businessactionid -- EVO-31125
 LEFT JOIN taxroundingrepairorder ON taxroundingrepairorder.businessactionid = ba.businessactionid
+    AND oobmissingmopccmapping.businessactionid IS NULL
 LEFT JOIN rentalmopdealdeposit ON rentalmopdealdeposit.businessactionid = ba.businessactionid -- EVO-41900
 LEFT JOIN dealunitbadsaletype ON dealunitbadsaletype.businessactionid = ba.businessactionid -- EVO-26651
 LEFT JOIN extralinevendor ON extralinevendor.businessactionid = ba.businessactionid -- EVO-40791
