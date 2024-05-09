@@ -601,6 +601,12 @@ AS (
 		AND ba.rawSTATUS = 2
 	GROUP BY ba.businessactionid
 	),
+groupfordealunitid
+AS (
+	SELECT businessactionid
+	FROM maedata
+	WHERE txt ilike '%Could not find the group for dealUnitID%'
+	),
 tradedealid
 AS (
 	SELECT businessactionid
@@ -1009,6 +1015,10 @@ SELECT ba.documentnumber AS document_number,
 			THEN 'EVO-21635 Error Accessing, RO Unit with Bad Deal ID | T1 Preapproved'
 		ELSE ''
 		END || CASE 
+		WHEN groupfordealunitid.businessactionid IS NOT NULL -- MU with bad dealunitid // NOT TESTED, PLEASE CORRECT IF NOT WORKING
+			THEN 'EVO-16159 Cant find group for dealunitid | T2'
+		ELSE ''
+		END || CASE 
 		WHEN oobdupepartinvoice.businessactionid IS NOT NULL -- Tested and confirmed Duplicate Part invoice / SO
 			THEN 'EVO-36594 Duplicate Part Invoice / SO | T2'
 		ELSE ''
@@ -1047,6 +1057,10 @@ SELECT ba.documentnumber AS document_number,
 		END || CASE 
 		WHEN taxoobpartinvoice.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
 			THEN 'EVO-17198 Part Invoice OOB Tax Not Rounded Properly | T1 Preapproved'
+		ELSE ''
+		END || CASE 
+		WHEN groupfordealunitid.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
+			THEN 'EVO-16159 Could Not Find Geoup For Deal Unit ID | T2'
 		ELSE ''
 		END || CASE 
 		WHEN oobmissingmoppartinvoice.businessactionid IS NOT NULL
@@ -1115,6 +1129,7 @@ LEFT JOIN oobdupepartinvoice ON oobdupepartinvoice.businessactionid = ba.busines
 LEFT JOIN oobmissingdiscountpartinvoice ON oobmissingdiscountpartinvoice.businessactionid = ba.businessactionid
 	AND oobzerosummoppartinvoice.businessactionid IS NULL -- EVO-20828
 LEFT JOIN oobnonpaypartinvoice ON oobnonpaypartinvoice.businessactionid = ba.businessactionid -- EVO-39247
+LEFT JOIN groupfordealunitid ON groupfordealunitid.businessactionid = ba.businessactionid -- EVO-16159
 LEFT JOIN oobdepositapplied ON oobdepositapplied.businessactionid = ba.businessactionid -- EVO-17384
 LEFT JOIN oobdepositappliedpenny ON oobdepositappliedpenny.businessactionid = ba.businessactionid -- EVO-20339
 LEFT JOIN oobhandlingpartinvoice ON oobhandlingpartinvoice.businessactionid = ba.businessactionid -- EVO-37782
