@@ -376,7 +376,7 @@ ORDER BY hist.accountingid,
 	coa.acctdept;
 
 /*oob transaction*/
-WITH hist
+WITH je_bal_per_store
 AS (
 	SELECT sum(amtdebit - amtcredit) AS storebal,
 		h.journalentryid,
@@ -388,16 +388,18 @@ AS (
 	GROUP BY locationid,
 		journalentryid,
 		accountingid
+	HAVING sum(amtdebit - amtcredit) != 0
 	),
-balperstore
+je_balance_aggregrate
 AS (
 	SELECT journalentryid,
 		max(LEFT(DATE::VARCHAR, 10)) AS DATE,
 		count(storebal) AS balances,
-		array_agg(locationid),
 		sum(storebal) AS oobsum,
-		accountingid
-	FROM hist
+		accountingid,
+		array_agg(hist.storebal) AS bals,
+		array_agg(coalesce(hist.locationid, 999999)) AS storeids
+	FROM je_bal_per_store hist
 	WHERE hist.storebal != 0
 	GROUP BY journalentryid,
 		accountingid
@@ -410,18 +412,30 @@ SELECT 'transaction does not balance' AS description,
 	CASE 
 		WHEN balances > 1
 			AND oobsum = 0
+			AND (NOT 0 = ANY (storeids) AND NOT 999999 = ANY (storeids))
 			THEN 'Out of Balance Across Stores'
+		WHEN balances > 1
+			AND oobsum = 0
+			AND (0 = ANY (storeids) OR 999999 = ANY (storeids))
+			THEN 'Out of Balance In Invalid Store - Storeid = 0 or Is Null in GL History'
+		WHEN balances > 1
+			AND oobsum = 0
+			AND (0 = ALL (storeids) OR 999999 = ALL (storeids))
+			THEN 'Out of Balance In Invalid Stores - Storeids = 0 or Is Null in GL History'
 		WHEN balances > 1
 			AND oobsum != 0
 			THEN 'Out of Balance Individual Stores'
 		WHEN balances = 1
 			THEN 'Out of Balance Single Store'
-		END AS bal_across_stores
-FROM balperstore bps
+		END AS bal_across_stores,
+		bps.bals,
+		bps.storeids
+FROM je_balance_aggregrate bps
 LEFT JOIN (
 	SELECT LEFT(DATE::VARCHAR, 10) AS day,
 		accountingid
 	FROM glhistory h
+	INNER JOIN costore s on s.storeid = h.locationid
 	GROUP BY accountingid,
 		LEFT(DATE::VARCHAR, 10)
 	HAVING SUM(amtdebit) - SUM(amtcredit) != 0
