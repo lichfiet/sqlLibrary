@@ -17,14 +17,16 @@ AS (
 				END) AS conscount,
 		coa.acctdept,
 		coa.deptid,
-		coa.acctdeptid AS HELP
+		coa.acctdeptid AS HELP,
+		coa.accountingid
 	FROM glchartofaccounts coa
 	LEFT JOIN glconsxref xr ON coa.acctdeptid = xr.acctdeptid
 	WHERE coa.accttype IN (3, 4, 6)
 	    AND coa.headerdetailtotalcons = 2
 	GROUP BY coa.acctdeptid,
 		coa.acctdept,
-		coa.deptid
+		coa.deptid,
+		coa.accountingid
 	),
 deptavg
 AS (
@@ -44,13 +46,26 @@ SELECT 'Account # ' || cc.acctdept || ' has irregular # of consolidations for it
 			THEN 'Account has ' || ABS(da.avgcount - cc.conscount) || ' too many consolidation(s)'
 		ELSE 'Account has ' || da.avgcount - cc.conscount || ' too few consolidation(s)'
 		END AS tofix,
-	'(# of Consolidations): ' || cc.conscount || ' , (Dept Average): ' || da.avgcount AS consolidation_count
+	'(# of Consolidations): ' || cc.conscount || ' , (Dept Average): ' || da.avgcount AS consolidation_count,
+	cc.accountingid,
+	store.stores
 FROM conscounts cc
 INNER JOIN deptavg da ON da.deptid = cc.deptid
 LEFT JOIN (
 	SELECT DISTINCT acctdeptid AS accts
 	FROM glhistory
 	) a ON a.accts = cc.HELP
+INNER JOIN (
+	SELECT CASE 
+			WHEN Length(LEFT(string_agg(storename, ', '), 20)) > 17
+				THEN LEFT(string_agg(storename, ', '), 20) || '...'
+			ELSE LEFT(string_agg(storename, ', '), 20)
+			END AS stores,
+		sm.parentstoreid AS accountingid
+	FROM costore s
+	INNER JOIN costoremap sm ON sm.childstoreid = s.storeid
+	GROUP BY sm.parentstoreid
+	) store ON store.accountingid = cc.accountingid
 WHERE cc.conscount != da.avgcount
 	AND a.accts IS NOT NULL
 ORDER BY da.avgcount - cc.conscount DESC;
