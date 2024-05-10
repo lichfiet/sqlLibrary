@@ -22,7 +22,7 @@ AS (
 	FROM glchartofaccounts coa
 	LEFT JOIN glconsxref xr ON coa.acctdeptid = xr.acctdeptid
 	WHERE coa.accttype IN (3, 4, 6)
-	    AND coa.headerdetailtotalcons = 2
+		AND coa.headerdetailtotalcons = 2
 	GROUP BY coa.acctdeptid,
 		coa.acctdept,
 		coa.deptid,
@@ -69,6 +69,7 @@ INNER JOIN (
 WHERE cc.conscount != da.avgcount
 	AND a.accts IS NOT NULL
 ORDER BY da.avgcount - cc.conscount DESC;
+
 --
 --
 -- Acct In Wrong Dept (Experimentl)
@@ -149,6 +150,7 @@ WHERE Round((abs(d.sequencenumber - d.avgseq) / stddevseq), 2) > 2 -- where is 2
 			OR d.nextdept < d.dept
 			)
 		);
+
 --
 -- Balance sheet account set up in a non-consolidated department
 WITH deptrank
@@ -177,6 +179,7 @@ INNER JOIN deptrank dr ON dr.deptid = coa.deptid
 WHERE dr.deptrank != 1
 	AND coa.profitbalance = 1
 	AND dr.deptcode NOT ilike '%lemco%';
+
 --
 -- COA Comparison, account missing from store
 WITH counts
@@ -196,20 +199,22 @@ AS (
 SELECT 'account might be missing from another location, if they have matching chart of accounts' AS description,
 	count,
 	acctdept,
-	avgcount as avgnumofaccountoccurences,
-	round(seqnum, - 2) as avgsequencenum
+	avgcount AS avgnumofaccountoccurences,
+	round(seqnum, - 2) AS avgsequencenum
 FROM counts c
 INNER JOIN average av ON 1 = 1
 WHERE count != avgcount;
+
 --
 -- Level greater than 9 on account (Causes COA to be unable to calculate. Numbers greater than 9 can be used but it's not advised) 
-SELECT 'Account # ' || coa.acctdept || ' has a level greater than 9' as description, 
+SELECT 'Account # ' || coa.acctdept || ' has a level greater than 9' AS description,
 	coa.acctdeptid,
 	coa.acctdept,
 	coa.totallevel,
 	coa.sequencenumber
 FROM glchartofaccounts coa
 WHERE abs(totallevel) > 9;
+
 --
 -- Account Code used multiple times, could break recalc
 SELECT 'Account # ' || acctdept || ' is used ' || count(coa.acctdept) || ' times, and could cause issues recalculating'
@@ -217,6 +222,7 @@ FROM glchartofaccounts coa
 GROUP BY coa.acctdept,
 	coa.accountingid
 HAVING count(coa.acctdept) != 1;
+
 --
 /* DEFECTS AND PRODUCT CRs */
 -- glconsxref entry mapped to invalid GL Account
@@ -394,6 +400,12 @@ ORDER BY hist.accountingid,
 WITH je_bal_per_store
 AS (
 	SELECT sum(amtdebit - amtcredit) AS storebal,
+		CASE 
+			WHEN locationid = 0
+				OR locationid IS NULL
+				THEN 0
+			ELSE sum(amtdebit - amtcredit)
+			END AS storebalvalid,
 		h.journalentryid,
 		locationid,
 		accountingid,
@@ -411,8 +423,9 @@ AS (
 		max(LEFT(DATE::VARCHAR, 10)) AS DATE,
 		count(storebal) AS balances,
 		sum(storebal) AS oobsum,
+		sum(storebalvalid) AS oob_amount_valid_storeids,
 		accountingid,
-		array_agg(hist.storebal) AS bals,
+		array_agg(round(hist.storebal * .0001, 2)) AS bals,
 		array_agg(coalesce(hist.locationid, 999999)) AS storeids
 	FROM je_bal_per_store hist
 	WHERE hist.storebal != 0
@@ -427,15 +440,24 @@ SELECT 'transaction does not balance' AS description,
 	CASE 
 		WHEN balances > 1
 			AND oobsum = 0
-			AND (NOT 0 = ANY (storeids) AND NOT 999999 = ANY (storeids))
+			AND (
+				NOT 0 = ANY (storeids)
+				AND NOT 999999 = ANY (storeids)
+				)
 			THEN 'Out of Balance Across Stores'
 		WHEN balances > 1
 			AND oobsum = 0
-			AND (0 = ANY (storeids) OR 999999 = ANY (storeids))
+			AND (
+				0 = ANY (storeids)
+				OR 999999 = ANY (storeids)
+				)
 			THEN 'Out of Balance In Invalid Store - Storeid = 0 or Is Null in GL History'
 		WHEN balances > 1
 			AND oobsum = 0
-			AND (0 = ALL (storeids) OR 999999 = ALL (storeids))
+			AND (
+				0 = ALL (storeids)
+				OR 999999 = ALL (storeids)
+				)
 			THEN 'Out of Balance In Invalid Stores - Storeids = 0 or Is Null in GL History'
 		WHEN balances > 1
 			AND oobsum != 0
@@ -443,14 +465,15 @@ SELECT 'transaction does not balance' AS description,
 		WHEN balances = 1
 			THEN 'Out of Balance Single Store'
 		END AS bal_across_stores,
-		bps.bals,
-		bps.storeids
+	bps.bals,
+	bps.storeids,
+	ROUND(oob_amount_valid_storeids * .0001, 2) AS oob_amount_valid_storeids
 FROM je_balance_aggregrate bps
 LEFT JOIN (
 	SELECT LEFT(DATE::VARCHAR, 10) AS day,
 		accountingid
 	FROM glhistory h
-	INNER JOIN costore s on s.storeid = h.locationid
+	INNER JOIN costore s ON s.storeid = h.locationid
 	GROUP BY accountingid,
 		LEFT(DATE::VARCHAR, 10)
 	HAVING SUM(amtdebit) - SUM(amtcredit) != 0
