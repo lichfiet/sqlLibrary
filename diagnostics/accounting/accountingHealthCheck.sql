@@ -5,7 +5,14 @@
     The other half point out Product CRs or issues caused by Product CRs.
 */
 --
-/* SETUP ISSUES */
+/* Outputs */
+-- 1. Accounts with too many or too few consolidations
+-- 2. Accounts in other departments / incorrect sequencing
+-- 3. Balance Sheet Account in Non Consolidated Department
+-- 4. Account may be missing from another store (if they have matching chart of accounts across stores)
+-- 5. Account level is greater than 9 (default max is 9)
+-- 6. Account code is used multiple times in a deaprtment (https://lightspeeddms.atlassian.net/browse/EVO-34604)
+--
 --
 -- Too many or few consolidations compared to the avg for the department rounded to the nearest whole number
 WITH conscounts
@@ -112,23 +119,23 @@ AS (
 		) depts ON depts.deptid = coa.deptid
 		AND coa.accountingid = depts.accountingid
 	)
-SELECT coa.accountingid,
-	store.stores AS store_names,
-	'Account: (' || coa.acctdept || ')' AS acctnumber,
-	'Seq #: ' || coa.sequencenumber::TEXT AS seqnumber,
-	'Department: (' || d.deptcode || ')' AS department,
-	Round(((d.sequencenumber - d.avgseq) / stddevseq), 2) AS std_deviations_from_mean,
+SELECT 'Account #: ' || coa.acctdept || ' has incorrect sequencing' AS description,
 	CASE 
 		WHEN Round(((d.sequencenumber - d.avgseq) / stddevseq), 2) > 1.7
-			THEN 'Account too low'
+			THEN 'Please increase the sequence number.'
 		WHEN Round(((d.sequencenumber - d.avgseq) / stddevseq), 2) < 1.7
-			THEN 'Account too high'
+			THEN 'Please decrease the sequence number.'
 		ELSE 'N/A'
 		END AS to_fix,
-	'(' || COALESCE(d.prevdeptcode::VARCHAR, 'N/A') || ', ' || COALESCE(d.deptcode::VARCHAR, 'N/A') || ', ' || COALESCE(d.nextdeptcode::VARCHAR, 'N/A') || ')' AS prevcurrnextcode,
-	'(' || COALESCE(d.prevdept::VARCHAR, 'N/A') || ', ' || COALESCE(d.dept::VARCHAR, 'N/A') || ', ' || COALESCE(d.nextdept::VARCHAR, 'N/A') || ')' AS prevcurrnextrank,
-	Round(d.avgseq, 2) AS avg_department_sequence,
-	ROUND(d.stddevseq, 2) AS std_deviation
+	'Seq #: ' || coa.sequencenumber::TEXT AS sequence_number,
+	'Department: (' || d.deptcode || ')' AS department_code,
+	'(' || COALESCE(d.prevdeptcode::VARCHAR, 'N/A') || ', ' || COALESCE(d.deptcode::VARCHAR, 'N/A') || ', ' || COALESCE(d.nextdeptcode::VARCHAR, 'N/A') || ')' AS prevcurrnext_dept,
+	-- '(' || COALESCE(d.prevdept::VARCHAR, 'N/A') || ', ' || COALESCE(d.dept::VARCHAR, 'N/A') || ', ' || COALESCE(d.nextdept::VARCHAR, 'N/A') || ')' AS prevcurrnextrank,
+	-- Round(d.avgseq, 2) AS avg_department_sequence,
+	-- ROUND(d.stddevseq, 2) AS std_deviation
+	coa.accountingid,
+	store.stores AS store_names,
+	Round(((d.sequencenumber - d.avgseq) / stddevseq), 2) AS stddev_from_mean
 FROM glchartofaccounts coa
 INNER JOIN deptorder d ON d.acctdeptid = coa.acctdeptid
 INNER JOIN (
@@ -149,7 +156,8 @@ WHERE Round((abs(d.sequencenumber - d.avgseq) / stddevseq), 2) > 2 -- where is 2
 			d.prevdept > d.dept
 			OR d.nextdept < d.dept
 			)
-		);
+		)
+ORDER BY coa.accountingid ASC;
 
 --
 -- Balance sheet account set up in a non-consolidated department
