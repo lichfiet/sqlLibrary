@@ -12,7 +12,9 @@
 -- 4. Account may be missing from another store (if they have matching chart of accounts across stores)
 -- 5. Account level is greater than 9 (default max is 9)
 -- 6. Account code is used multiple times in a deaprtment (https://lightspeeddms.atlassian.net/browse/EVO-34604)
---
+-- 7. Account is either not a detail account but has a consolidation, or is a detail account but consolidated to a non-consolidated account
+-- 8. GL History entry has a bad journal type (Causes entry to not be calculated)
+-- 9. GL History entry has an invalid location or accounting id or luid.
 --
 -- Too many or few consolidations compared to the avg for the department rounded to the nearest whole number
 WITH conscounts
@@ -349,7 +351,7 @@ GROUP BY coa.acctdept,
 HAVING count(b.fiscalyear) > 1;
 
 -- glbalance entries with a storeid not valid with costoremap
-SELECT 'gl balance entry with invalid store, check output 4 as potential cause' AS description, -- might be diff output now
+SELECT 'gl balance entry with invalid store' AS description, -- might be diff output now
 	glbalancesid,
 	coa.acctdept,
 	b.fiscalyear
@@ -360,7 +362,7 @@ INNER JOIN glchartofaccounts coa ON coa.acctdeptid = b.acctdeptid
 WHERE sm.childstoreid IS NULL;
 
 -- acctdeptid in glhistory not in glchartofaccounts
-SELECT 'acctdeptid in glhistory but not in glchartofaccounts' AS description,
+SELECT 'glhistory entries posted to invalid gl account id' AS description,
 	hist.glhistoryid,
 	hist.acctdeptid,
 	hist.accountingid,
@@ -371,7 +373,7 @@ LEFT JOIN glchartofaccounts coa ON hist.acctdeptid = coa.acctdeptid
 WHERE coa.acctdeptid IS NULL;
 
 -- acctdeptid not in glbalance table
-SELECT 'acctdeptid not in glbalance table' AS description,
+SELECT 'account number is not in the glbalance table, can''''t calculate a balance' AS description,
 	hist.glhistoryid,
 	hist.acctdeptid,
 	hist.accountingid
@@ -381,7 +383,7 @@ LEFT JOIN glbalance bal ON coa.acctdeptid = bal.acctdeptid
 WHERE bal.acctdeptid IS NULL;
 
 /*glhistory entries tied to non-detail account*/
-SELECT 'acctdeptid links to non-detail account in glhistory' AS description,
+SELECT 'journal entries posted to non-detail account in glhistory' AS description,
 	hist.glhistoryid,
 	hist.acctdeptid,
 	coa.acctdept,
@@ -496,7 +498,7 @@ WHERE (
 ORDER BY DATE DESC;
 
 /* day does not balance */
-SELECT 'day does not balance' AS description,
+SELECT 'day''''s GL History does not balance, debits != credits' AS description,
 	SUM(amtdebit) - SUM(amtcredit) AS oob_amount,
 	LEFT(DATE::VARCHAR, 10),
 	h.accountingid
@@ -507,18 +509,35 @@ HAVING SUM(amtdebit) - SUM(amtcredit) != 0
 ORDER BY MAX(DATE) DESC;
 
 /*journal entry to the current earnings account*/
-SELECT 'glhistory posted to the current earnings account' AS description,
-	hist.glhistoryid,
+SELECT 'general ledger entries posted to the (current earnings) account' AS description,
 	hist.journalentryid,
 	hist.DATE,
-	hist.acctdeptid,
-	hist.amtdebit,
-	hist.amtcredit,
+	coa.acctdept AS account_number,
+	ROUND(hist.amtdebit * .0001, 2) AS debit,
+	ROUND(hist.amtcredit * .0001, 2) AS credit,
 	hist.description,
 	hist.accountingid,
-	hist.locationid
-FROM glhistory hist,
-	acpreference pref
-WHERE pref.id = 'acct-CurrentEarningsAcctID'
-	AND hist.acctdeptid::TEXT = pref.value
-	AND hist.accountingid = pref.accountingid;
+	s.storename AS store
+FROM glhistory hist
+INNER JOIN glchartofaccounts coa on coa.acctdeptid = hist.acctdeptid
+INNER JOIN acpreference pref ON hist.acctdeptid::TEXT = pref.value
+	AND hist.accountingid = pref.accountingid
+INNER JOIN costore s ON s.storeid = hist.locationid
+WHERE pref.id = 'acct-CurrentEarningsAcctID';
+
+/*journal entry to the current earnings account*/
+SELECT 'general ledger entries posted to the (retained earnings) account' AS description,
+	hist.journalentryid,
+	hist.DATE,
+	coa.acctdept AS account_number,
+	ROUND(hist.amtdebit * .0001, 2) AS debit,
+	ROUND(hist.amtcredit * .0001, 2) AS credit,
+	hist.description,
+	hist.accountingid,
+	s.storename AS store
+FROM glhistory hist
+INNER JOIN glchartofaccounts coa on coa.acctdeptid = hist.acctdeptid
+INNER JOIN acpreference pref ON hist.acctdeptid::TEXT = pref.value
+	AND hist.accountingid = pref.accountingid
+INNER JOIN costore s ON s.storeid = hist.locationid
+WHERE pref.id = 'acct-PreferencesRetainedEarningsGLAcctID'
