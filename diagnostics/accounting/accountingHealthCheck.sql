@@ -1,20 +1,31 @@
 /* Accounting Health Check 
 
-    The first half of these SQLs are to pin-point setup related issues with the chart of accounts.
-    
-    The other half point out Product CRs or issues caused by Product CRs.
+    Diagnostics 1-6 are helpful for COA setup troubleshooting/CR.
+    The remainder are helpgul for glhistory troubleshooting. Both
+    can cause TB OOB, a full document will come out with what each
+    one does and how it can affect GL info at some points.
+
 */
 --
 /* Outputs */
 -- 1. Accounts with too many or too few consolidations
 -- 2. Accounts in other departments / incorrect sequencing
 -- 3. Balance Sheet Account in Non Consolidated Department
--- 4. Account may be missing from another store (if they have matching chart of accounts across stores)
--- 5. Account level is greater than 9 (default max is 9)
--- 6. Account code is used multiple times in a deaprtment (https://lightspeeddms.atlassian.net/browse/EVO-34604)
--- 7. Account is either not a detail account but has a consolidation, or is a detail account but consolidated to a non-consolidated account
--- 8. GL History entry has a bad journal type (Causes entry to not be calculated)
--- 9. GL History entry has an invalid location or accounting id or luid.
+-- 4. Account level is greater than 9 (default max is 9)
+-- 5. Account code is used multiple times in a deaprtment (https://lightspeeddms.atlassian.net/browse/EVO-34604)
+-- 6. Account is either not a detail account but has a consolidation, or is a detail account but consolidated to a non-consolidated account
+-- 7. GL History entry has a bad journal type (Causes entry to not be calculated)
+-- 8. GL History entry has an invalid location or accounting id or luid.
+-- 9. Caused by #8, account has multiple entries in the glbalance table, for one fiscal year (different storeids or luids)
+-- 10. Caused by #8, account has a GL Balance entry, with a storeid that does not exist
+-- 11. Caused by #5, account is missing an entry in GL Balance (needs to be revised to find gl accounts missing balance for specific fiscal year)
+-- 12. GL History entries tied to a non-existent account
+-- 13. GL History entries tied to a non-detail account
+-- 14. Journal Entry out of balance (can be out of balance between stores or missing a storeid, in addition to normal oob, multiple CRs)
+-- 15. Day's debits != days credits, day it out of balance
+-- 16. JEs to current earnings account
+-- 17. JEs to retained earnings account
+-- 
 --
 -- Too many or few consolidations compared to the avg for the department rounded to the nearest whole number
 WITH conscounts
@@ -189,32 +200,6 @@ INNER JOIN deptrank dr ON dr.deptid = coa.deptid
 WHERE dr.deptrank != 1
 	AND coa.profitbalance = 1
 	AND dr.deptcode NOT ilike '%lemco%';
-
---
--- COA Comparison, account missing from store
-WITH counts
-AS (
-	SELECT count(coa.acctdept),
-		coa.acctdept,
-		1 AS test,
-		avg(sequencenumber) AS seqnum
-	FROM glchartofaccounts coa
-	GROUP BY coa.acctdept
-	),
-average
-AS (
-	SELECT round(avg(count), 0) AS avgcount
-	FROM counts
-	)
-SELECT 'account might be missing from another location, if they have matching chart of accounts' AS description,
-	count,
-	acctdept,
-	avgcount AS avgnumofaccountoccurences,
-	round(seqnum, - 2) AS avgsequencenum
-FROM counts c
-INNER JOIN average av ON 1 = 1
-WHERE count != avgcount;
-
 --
 -- Level greater than 9 on account (Causes COA to be unable to calculate. Numbers greater than 9 can be used but it's not advised) 
 SELECT 'Account # ' || coa.acctdept || ' has a level greater than 9' AS description,
@@ -278,7 +263,7 @@ WHERE det.acctdeptid IS NULL
 	OR det.accountingid != xref.accountingid
 ORDER BY det.acctdeptid,
 	cons.acctdeptid;
-
+--
 -- glhistory entries with invalid jtypeid within last 4 years / needs modification
 SELECT 'glhistory entries with invalid jtypeid' AS description,
 	*
@@ -361,6 +346,17 @@ LEFT JOIN costoremap sm ON sm.parentstoreid = b.accountingid
 INNER JOIN glchartofaccounts coa ON coa.acctdeptid = b.acctdeptid
 WHERE sm.childstoreid IS NULL;
 
+--
+-- acctdeptid not in glbalance table
+SELECT 'account number is not in the glbalance table, can''''t calculate a balance' AS description,
+	hist.glhistoryid,
+	hist.acctdeptid,
+	hist.accountingid
+FROM glhistory hist
+INNER JOIN glchartofaccounts coa ON hist.acctdeptid = coa.acctdeptid
+LEFT JOIN glbalance bal ON coa.acctdeptid = bal.acctdeptid
+WHERE bal.acctdeptid IS NULL;
+--
 -- acctdeptid in glhistory not in glchartofaccounts
 SELECT 'glhistory entries posted to invalid gl account id' AS description,
 	hist.glhistoryid,
@@ -371,17 +367,7 @@ SELECT 'glhistory entries posted to invalid gl account id' AS description,
 FROM glhistory hist
 LEFT JOIN glchartofaccounts coa ON hist.acctdeptid = coa.acctdeptid
 WHERE coa.acctdeptid IS NULL;
-
--- acctdeptid not in glbalance table
-SELECT 'account number is not in the glbalance table, can''''t calculate a balance' AS description,
-	hist.glhistoryid,
-	hist.acctdeptid,
-	hist.accountingid
-FROM glhistory hist
-INNER JOIN glchartofaccounts coa ON hist.acctdeptid = coa.acctdeptid
-LEFT JOIN glbalance bal ON coa.acctdeptid = bal.acctdeptid
-WHERE bal.acctdeptid IS NULL;
-
+--
 /*glhistory entries tied to non-detail account*/
 SELECT 'journal entries posted to non-detail account in glhistory' AS description,
 	hist.glhistoryid,
