@@ -159,13 +159,15 @@ AS (
 		sum(cip.amount) AS mopamount,
 		array_agg(cip.description) AS mopdescriptionsarr,
 		string_agg(cip.description, '') AS mopdescriptionsstr,
-		array_agg(cip.amount) AS mopamountarr
+		array_agg(cip.amount) AS mopamountarr,
+		array_agg(cip.methodofpaymentid) AS mopids,
+		array_agg(cip.arcustomerid) AS arcustomerids
 	FROM maedata ba
 	INNER JOIN cocommoninvoice ci ON ci.invoicenumber::VARCHAR = ba.invoicenumber
 	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
 	GROUP BY ba.businessactionid
 	),
-negativedealtax
+negativedealtax -- NEEDS OPTIMIZATION
 AS (
 	SELECT businessactionid
 	FROM sadeal d
@@ -183,19 +185,18 @@ AS (
 	),
 schedacctnotvalidar
 AS (
-	SELECT ma.businessactionid
+	SELECT ma.businessactionid -- optimized
 	FROM maedata ma
-	INNER JOIN cocommoninvoice ci ON ci.invoicenumber::TEXT = ma.invoicenumber::TEXT
-	INNER JOIN cocommoninvoicepayment cip using (commoninvoiceid)
-	INNER JOIN comethodofpayment mop ON mop.methodofpaymentid = cip.methodofpaymentid
+	INNER JOIN paymentinfo pyi ON pyi.businessactionid = ma.businessactionid
+	INNER JOIN comethodofpayment mop ON mop.methodofpaymentid = ANY (pyi.mopids)
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = mop.glacct
 	WHERE ma.rawSTATUS = 2
 		AND ma.rawtxt ilike '%Not Valid%'
-		AND coa.schedule = 0
-		AND cip.arcustomerid <> 0
+		AND 0 = ALL (pyi.arcustomerids)
 	GROUP BY ma.businessactionid
+	HAVING sum(coa.schedule) = 0
 	),
-miscinvnonarmop
+miscinvnonarmop -- probably optimized
 AS (
 	SELECT ma.businessactionid
 	FROM maedata ma
@@ -210,7 +211,7 @@ AS (
 		AND mi.arcustomerid > 0
 	GROUP BY ma.businessactionid
 	),
-dealarglaccount
+dealarglaccount -- NEEDS OPTIMIZATION
 AS (
 	SELECT DUMP.errorid AS businessactionid
 	FROM mabusinessactionitem bi
@@ -258,7 +259,7 @@ AS (
 			END
 	GROUP BY DUMP.errorid
 	),
-erroraccropart
+erroraccropart -- NEEDS OPTIMIZATION
 AS (
 	SELECT ba.businessactionid
 	FROM serepairorderpart rp
@@ -272,7 +273,7 @@ AS (
 		AND c.storeid != rp.storeid
 	GROUP BY ba.businessactionid
 	),
-erroraccrolabor
+erroraccrolabor -- NEEDS OPTIMIZATION
 AS (
 	SELECT businessactionid
 	FROM serepairorderlabor rol
@@ -285,7 +286,7 @@ AS (
 	WHERE ba.rawstatus = 2
 	GROUP BY businessactionid
 	),
-erroraccrolabor2
+erroraccrolabor2 -- NEEDS OPTIMIZATION
 AS (
 	SELECT ba.businessactionid -- this one probably needs a different CR but it has to do with the warranty company having a diff storeid for freight
 	FROM serepairorder ro
@@ -299,7 +300,7 @@ AS (
 	WHERE ba.rawstatus = 2
 	GROUP BY ba.businessactionid
 	),
-erroraccmiscsaletype
+erroraccmiscsaletype -- NEEDS OPTIMIZATION
 AS (
 	SELECT ba.businessactionid
 	FROM serepairorder ro
@@ -309,7 +310,7 @@ AS (
 		AND ba.rawdocumentid = ro.repairorderid
 	GROUP BY ba.businessactionid
 	),
-erroraccpicat
+erroraccpicat -- optimized
 AS (
 	SELECT ba.businessactionid
 	FROM maedata ba
@@ -319,7 +320,7 @@ AS (
 	WHERE ba.rawstatus = 2
 	GROUP BY ba.businessactionid
 	),
-erroraccreceivepart
+erroraccreceivepart -- NEEDS OPTIMIZATION // turn into separate queries/CTEs, and re-write them
 AS (
 	SELECT businessactionid
 	FROM (
@@ -351,20 +352,20 @@ AS (
 		) AS subquery
 	GROUP BY businessactionid
 	),
-partinvoicescheduledmu
+partinvoicescheduledmu1
 AS (
 	SELECT ba.businessactionid
-	FROM papartinvoiceline pil
-	INNER JOIN papartinvoice pi ON pi.partinvoiceid = pil.partinvoiceid
-	INNER JOIN cocategory c ON c.categoryid = pil.categoryid
-	INNER JOIN maedata ba ON ba.rawdocumentid = pil.partinvoiceid
-	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = c.glinventory
+	FROM maedata ba
+	INNER JOIN papartinvoiceline pil ON ba.rawdocumentid = pil.partinvoiceid
+	INNER JOIN papartinvoice pi ON pil.partinvoiceid = pi.partinvoiceid
+	INNER JOIN cocategory c ON pil.categoryid = c.categoryid
+	INNER JOIN glchartofaccounts coa ON c.glinventory = coa.acctdeptid
 	WHERE coa.schedule != 0
 		AND ba.rawstatus = 2
 	GROUP BY ba.businessactionid
-	
-	UNION
-	
+	),
+partinvoicescheduledmu -- NEEDS OPTIMIZATION // turn into separate CTEs and re-write
+AS (
 	SELECT ba.businessactionid
 	FROM papartadjustment pa
 	INNER JOIN pareceivingdocument rd ON rd.receivingdocumentid = pa.receivingdocumentid
@@ -389,20 +390,18 @@ AS (
 		AND ba.rawstatus = 2
 	GROUP BY ba.businessactionid
 	),
-partinvoicemubadsaletype
+partinvoicemubadsaletype -- optimized
 AS (
 	SELECT ba.businessactionid
 	FROM maedata ba
-	INNER JOIN papartinvoice pi ON ba.rawdocumentid = pi.partinvoiceid
-	INNER JOIN papartinvoiceline pil ON pil.partinvoiceid = pi.partinvoiceid
+	INNER JOIN papartinvoiceline pil ON pil.partinvoiceid = ba.rawdocumentid
 	LEFT JOIN cosaletype st ON st.saletypeid = pil.saletypeid
-	LEFT JOIN samajorunitpart mup ON mup.majorunitpartid = pil.referencepartid
 	WHERE ba.rawstatus = 2
 		AND st.usagecode <> 2
 		AND ba.rawtxt ilike '%Invalid Usage Code%'
 	GROUP BY businessactionid
 	),
-subletcloseoutscheduledmu
+subletcloseoutscheduledmu -- NEEDS OPTIMIZATION
 AS (
 	SELECT ba.businessactionid
 	FROM sesubletcloseout sc
@@ -415,7 +414,7 @@ AS (
 		AND ba.rawstatus = 2
 	GROUP BY ba.businessactionid
 	),
-analysispending
+analysispending -- NEEDS OPTIMIZATION // SMALL UPDATE, join on maedata CTE furst
 AS (
 	SELECT ba.businessactionid
 	FROM papartadjustment pa
@@ -425,7 +424,7 @@ AS (
 		AND ba.rawstatus = 4
 		AND ba.rawdocumenttype = 1007
 	),
-invalidglnonpayro
+invalidglnonpayro -- NEEDS OPTIMIZATION // join on maedata first
 AS (
 	SELECT ma.businessactionid
 	FROM serepairorderjob roj
@@ -438,7 +437,7 @@ AS (
 		AND ma.rawstatus = 2
 	GROUP BY ma.businessactionid
 	),
-invalidgldealandinvoice
+invalidgldealandinvoice -- BROKEN, cant differentiate between paid amount or deposit applied
 AS (
 	SELECT b.businessactionid
 	FROM maedata b
@@ -450,7 +449,7 @@ AS (
 		AND pi.mopdescriptionsstr = ''
 	GROUP BY b.businessactionid
 	),
-invalidglclaimsubmission
+invalidglclaimsubmission -- NEEDS OPTIMIZATION // small fix, move the AND clauses up into the joins if possible to eliminate extra joins
 AS (
 	SELECT ba.businessactionid AS businessactionid
 	FROM maedata ba
@@ -465,7 +464,7 @@ AS (
 		AND roj.warrantycompanyid <> wsc.warrantycompanyid
 	GROUP BY ba.businessactionid
 	),
-taxidrental
+taxidrental -- NEEDS OPTIMIZATION // too many joins, needs to be reworked somehow
 AS (
 	SELECT ba.businessactionid
 	FROM rerentalpostingtaxdetail rptd
@@ -481,7 +480,7 @@ AS (
 		AND t2.taxid IS NULL
 	GROUP BY ba.businessactionid
 	),
-taxiddeal1
+taxiddeal1 -- NEEDS OPTIMIZATION // select from maedata first, then join on deal finalization, etc
 AS (
 	SELECT ba.businessactionid
 	FROM sadealunittax dut
@@ -497,7 +496,7 @@ AS (
 		AND ba.rawstatus = 2
 	GROUP BY ba.businessactionid
 	),
-taxiddeal2 -- verified it works on two deals
+taxiddeal2 -- NEEDS OPTIMIZATION // select from maedata first, then join on deal finalization, etc
 AS (
 	SELECT ba.businessactionid
 	FROM sadeal d
@@ -515,7 +514,7 @@ AS (
 		AND t.storeid <> d.storeid
 	GROUP BY ba.businessactionid
 	),
-dealtaxroundpenny
+dealtaxroundpenny -- NEEDS OPTIMIZATION // select from maedata first, then join on deal finalization, etc
 AS (
 	SELECT ba.businessactionid
 	FROM sadealunittax dut
@@ -528,7 +527,7 @@ AS (
 		AND taxpct > 0
 		AND abs(dut.taxamt) = (ROUND((((((dut.taxableamt) * (dut.taxpct::FLOAT / 1000000))) * 1)::INT) * 0.01) * 100) + 100
 	),
-dealunitbadsaletype
+dealunitbadsaletype -- optimized
 AS (
 	SELECT ba.businessactionid
 	FROM maedata ba
@@ -538,20 +537,19 @@ AS (
 	INNER JOIN cosaletype st ON st.saletypeid = du.saletypeid
 	WHERE st.storeid <> du.storeid
 	),
-taxidpartinvoice1
+taxidpartinvoice1 -- optimized i think
 AS (
 	SELECT ba.businessactionid
 	FROM maedata ba
-	INNER JOIN papartinvoice pi ON pi.partinvoiceid = ba.rawdocumentid
-	INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
+	INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = ba.rawdocumentid
 	INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
 	LEFT JOIN cotax t ON t.taxid = pite.taxentityid
 	LEFT JOIN cotax t1 ON t1.taxcategoryid = piti.taxcategoryid
 	INNER JOIN cotaxcategory ct ON ct.taxcategoryid = piti.taxcategoryid
 	WHERE ba.rawSTATUS = 2
 		AND (
-			t1.taxid <> t.taxid
-			AND t1.description = t.description
+			t1.description = t.description
+			AND t1.taxid <> t.taxid
 			AND t1.taxid <> pite.taxentityid
 			AND ct.taxcategoryid = t1.taxcategoryid
 			OR pite.taxentityid IS NULL
@@ -559,7 +557,7 @@ AS (
 	GROUP BY partinvoicetaxentityid,
 		ba.businessactionid
 	),
-longvaltax -- https://lightspeeddms.atlassian.net/browse/EVO-37225
+longvaltax -- https://lightspeeddms.atlassian.net/browse/EVO-37225 -- NEEDS OPTIMIZATION // move around joins and break out into diff ctes
 AS (
 	SELECT ba.businessactionid
 	FROM sadealadjustmenttax dat
@@ -582,7 +580,7 @@ AS (
 		AND errortext.txt ilike '%Tax Entity not rounded%'
 	GROUP BY ba.businessactionid
 	),
-dealunitid1 -- https://lightspeeddms.atlassian.net/browse/EVO-21635
+dealunitid1 -- https://lightspeeddms.atlassian.net/browse/EVO-21635 -- NEEDS OPTIMIZATION // move around joins
 AS (
 	SELECT ba.businessactionid
 	FROM samajorunit mu
@@ -601,13 +599,13 @@ AS (
 		AND ba.rawSTATUS = 2
 	GROUP BY ba.businessactionid
 	),
-groupfordealunitid
+groupfordealunitid -- hypeer optimized
 AS (
 	SELECT businessactionid
 	FROM maedata
 	WHERE txt ilike '%Could not find the group for dealUnitID%'
 	),
-tradedealid
+tradedealid -- optimized
 AS (
 	SELECT businessactionid
 	FROM maedata ba
@@ -616,7 +614,7 @@ AS (
 		AND ba.rawdocumenttype = 3007
 		AND dt.dealtradeid IS NULL
 	),
-mutransferstoreid
+mutransferstoreid -- NEEDS OPTIMIZATION // move around joins
 AS (
 	SELECT ba.businessactionid
 	FROM samajorunit mu
@@ -627,18 +625,17 @@ AS (
 		AND mu.STATE = 10
 		AND ba.rawSTATUS = 2
 	),
-oobdupepartinvoice
+oobdupepartinvoice -- performance optimized
 AS (
 	SELECT ba.businessactionid
-	FROM paparthistory h
-	INNER JOIN papartinvoice i ON h.partinvoiceid = i.partinvoiceid
-	INNER JOIN papartinvoiceline il ON h.partinvoicelineid = il.partinvoicelineid
-	LEFT JOIN paspecialorder so ON so.partinvoiceid = h.partinvoiceid
-	INNER JOIN maedata ba ON ba.rawdocumentid = h.partinvoiceid
+	FROM maedata ba
+	INNER JOIN papartinvoiceline il ON ba.rawdocumenttype = 1001
+		AND ba.rawdocumentid = il.partinvoiceid
+	INNER JOIN paparthistory h ON h.partinvoiceid = il.partinvoiceid
 	WHERE il.partinvoiceid <> h.partinvoiceid
 		AND ba.rawSTATUS = 2
 	),
-oobmissingdiscountpartinvoice
+oobmissingdiscountpartinvoice -- NEEDS OPTIMIZATION // did some mini optimization fixing the CTEs and subqueries, needs to do some more
 AS (
 	SELECT businessactionid
 	FROM (
@@ -651,27 +648,34 @@ AS (
 				)
 		SELECT ba.businessactionid
 		FROM maedata ba
-		INNER JOIN papartinvoiceline pi ON ba.rawdocumentid = pi.partinvoiceid
+		INNER JOIN papartinvoiceline pi ON ba.rawdocumenttype = 1001
+			AND ba.rawdocumentid = pi.partinvoiceid
 		INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
 		INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
 		INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
 		INNER JOIN (
 			SELECT pi.partinvoiceid
 			FROM maedata d
-			INNER JOIN papartinvoice pi ON pi.partinvoiceid = d.rawdocumentid
+			INNER JOIN papartinvoice pi ON d.rawdocumenttype = 1001
+				AND pi.partinvoiceid = d.rawdocumentid
 			INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
 			INNER JOIN soamt ON soamt.partinvoiceid = pi.partinvoiceid
 			WHERE pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
 			) v1 ON v1.partinvoiceid = pi.partinvoiceid
 		INNER JOIN (
+			-- experiemental update
 			SELECT SUM(depositapplied) AS applied,
 				partinvoiceid
-			FROM papartinvoiceline
+			FROM maedata ba
+			INNER JOIN papartinvoiceline pil ON ba.rawdocumenttype = 1001
+				AND pil.partinvoiceid = ba.rawdocumentid
 			GROUP BY partinvoiceid
 			) dep ON dep.partinvoiceid = pi.partinvoiceid
 		INNER JOIN (
 			SELECT pi.partinvoiceid
-			FROM papartinvoice pi
+			FROM maedata d
+			INNER JOIN papartinvoice pi ON d.rawdocumenttype = 1001
+				AND pi.partinvoiceid = d.rawdocumentid
 			INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
 			INNER JOIN soamt ON soamt.partinvoiceid = pi.partinvoiceid
 				AND pi.specialordercollectamount = (soamt.amt + pit.specialordertax)
@@ -687,73 +691,65 @@ AS (
 		) data
 	GROUP BY businessactionid
 	),
-oobdepositapplied
-AS (
-	SELECT businessactionid
-	FROM (
-		SELECT ba.businessactionid
-		FROM papartinvoice pi
-		INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
-		INNER JOIN papartinvoiceline pil ON pil.partinvoiceid = pi.partinvoiceid
-		INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
-		INNER JOIN paspecialorder so ON so.specialorderid IN (pil.specialorderid, pil.layawayid)
-		WHERE ba.rawSTATUS = 2
-			AND (
-				pil.qtypickedup > 0
-				OR pil.qtyspecialorder < 0
-				)
-			AND so.isconversion = false
-			AND pil.dealadjustmentid IS NULL
-		GROUP BY pi.partinvoiceid,
-			pi.partinvoicenumber,
-			ba.businessactionid
-		HAVING SUM(pil.depositapplied) <> MAX(pit.soldnowprepaidamount)
-		) ba
-	GROUP BY businessactionid
-	),
-oobdepositappliedpenny
+oobdepositapplied -- optimized, and took out of nested query
 AS (
 	SELECT ba.businessactionid
-	FROM papartinvoice pi
-	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
-	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
-	INNER JOIN papartinvoiceline pil ON pil.partinvoiceid = pi.partinvoiceid
+	FROM maedata ba
+	INNER JOIN papartinvoicetotals pit ON ba.rawdocumentid = pit.partinvoiceid
+	INNER JOIN papartinvoiceline pil ON ba.rawdocumentid = pil.partinvoiceid
+	INNER JOIN paspecialorder so ON so.specialorderid IN (pil.specialorderid, pil.layawayid)
+	WHERE ba.rawSTATUS = 2
+		AND (
+			pil.qtypickedup > 0
+			OR pil.qtyspecialorder < 0
+			)
+		AND so.isconversion = false
+		AND pil.dealadjustmentid IS NULL
+	GROUP BY ba.rawdocumentid,
+		ba.businessactionid
+	HAVING SUM(pil.depositapplied) <> MAX(pit.soldnowprepaidamount)
+	),
+oobdepositappliedpenny -- optimized
+AS (
+	SELECT ba.businessactionid
+	FROM maedata ba
+	INNER JOIN papartinvoicetotals pit ON ba.rawdocumentid = pit.partinvoiceid
+	INNER JOIN papartinvoiceline pil ON ba.rawdocumentid = pil.partinvoiceid
 	GROUP BY ba.businessactionid
-	HAVING @(SUM(pil.depositapplied) - MAX(pit.soldnowprepaidamount)) BETWEEN 100
+	HAVING ABS(SUM(pil.depositapplied) - MAX(pit.soldnowprepaidamount)) BETWEEN 100
 			AND 500
 	),
-oobnonpaypartinvoice
+oobnonpaypartinvoice -- optimized
 AS (
 	SELECT ba.businessactionid
-	FROM papartinvoice pi
-	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
-	INNER JOIN cosaletype st ON st.saletypeid = pi.handlingsaletypeid
+	FROM maedata ba
+	INNER JOIN papartinvoice pi ON ba.rawdocumentid = pi.partinvoiceid
+	INNER JOIN cosaletype st ON pi.handlingsaletypeid = st.saletypeid
+	WHERE ba.rawSTATUS = 2
 		AND st.usagecode = 7
-	WHERE ba.rawSTATUS = 2
-		AND pi.invoicehandlingamt + specialorderhandling != 0
-		AND pi.invoicehandlingamt + specialorderhandling = ba.rawoobamt
+		AND pi.invoicehandlingamt + pi.specialorderhandling != 0
+		AND pi.invoicehandlingamt + pi.specialorderhandling = ba.rawoobamt
 	),
-oobhandlingpartinvoice
+oobhandlingpartinvoice -- optimized
 AS (
 	SELECT ba.businessactionid
-	FROM papartinvoice pi
-	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
-	INNER JOIN cosaletype st ON st.saletypeid = pi.handlingsaletypeid
+	FROM maedata ba
+	INNER JOIN papartinvoice pi ON ba.rawdocumentid = pi.partinvoiceid
+	INNER JOIN cosaletype st ON pi.handlingsaletypeid = st.saletypeid
+	WHERE ba.rawSTATUS = 2
 		AND st.usagecode != 7
-	WHERE ba.rawSTATUS = 2
-		AND pi.invoicehandlingamt + specialorderhandling != 0
-		AND abs(pi.invoicehandlingamt + specialorderhandling) = abs(ba.rawoobamt)
+		AND pi.invoicehandlingamt + pi.specialorderhandling != 0
+		AND ABS(pi.invoicehandlingamt + pi.specialorderhandling) = ABS(ba.rawoobamt)
 	),
-taxoobpartinvoice -- https://lightspeeddms.atlassian.net/browse/EVO-17198
+taxoobpartinvoice -- https://lightspeeddms.atlassian.net/browse/EVO-17198 -- optimized
 AS (
 	SELECT ba.businessactionid
-	FROM papartinvoice pi
-	INNER JOIN papartinvoicetaxitem piti ON piti.partinvoiceid = pi.partinvoiceid
-	INNER JOIN papartinvoicetaxentity pite ON pite.partinvoicetaxitemid = piti.partinvoicetaxitemid
-	INNER JOIN maedata ba ON ba.invoicenumber = pi.partinvoicenumber::TEXT
-	WHERE ba.rawdocumenttype = 1001
+	FROM maedata ba
+	INNER JOIN papartinvoicetaxitem piti ON ba.rawdocumenttype = 1001
 		AND ba.rawstatus = 2
-		AND (piti.taxamount - pite.taxamount) = ba.rawoobamt
+		AND ba.rawdocumentid = piti.partinvoiceid
+	INNER JOIN papartinvoicetaxentity pite ON piti.partinvoicetaxitemid = pite.partinvoicetaxitemid
+	WHERE (piti.taxamount - pite.taxamount) = ba.rawoobamt
 	GROUP BY ba.businessactionid
 	),
 armopinternalinvoice
@@ -761,12 +757,12 @@ AS (
 	SELECT ba.businessactionid
 	FROM maedata ba
 	INNER JOIN papartinvoice pi ON pi.partinvoiceid = ba.rawdocumentid
-	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = pi.commoninvoiceid
+	INNER JOIN paymentinfo pyi ON pyi.businessactionid = ba.businessactionid
 	WHERE ba.rawSTATUS = 2
 		AND ba.rawtxt ilike 'No A/R Customer for Method of Payment %'
 		AND pi.invoicetype = 1
 		AND pi.majorunitid != 0
-		AND cip.amount = 0
+		AND pyi.mopamount = 0
 	GROUP BY ba.businessactionid
 	),
 oobmissingmopccmapping
@@ -779,32 +775,31 @@ AS (
 		AND cip.mopamount != 0
 		AND ba.rawstatus = 2
 	),
-oobmissingmoppartinvoice
+oobmissingmoppartinvoice -- optimized
 AS (
 	SELECT ba.businessactionid
-	FROM papartinvoice pi
-	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
-	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
-	INNER JOIN cocommoninvoice ci ON ci.commoninvoiceid = pi.commoninvoiceid
-	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
+	FROM maedata ba
+	INNER JOIN papartinvoice pi ON ba.rawdocumentid = pi.partinvoiceid
+	INNER JOIN papartinvoicetotals pit ON pi.partinvoiceid = pit.partinvoiceid
+	INNER JOIN paymentinfo pyi ON pyi.businessactionid = ba.businessactionid
 	WHERE ba.rawSTATUS = 2
 		AND pi.invoicetype NOT IN (2, 3)
 		AND ba.oobamt = pit.soldnowsubtotal
-		AND cip.description = ''
-	GROUP BY ba.businessactionid
-	HAVING sum(cip.amount) = 0
+		AND pyi.mopdescriptionsstr = ''
+		AND pyi.mopamount = 0
 	),
-oobzerosummoppartinvoice
+oobzerosummoppartinvoice -- optimized
 AS (
 	-- EVO-31037
 	SELECT ba.businessactionid
-	FROM papartinvoice pi
-	INNER JOIN maedata ba ON ba.rawdocumentid = pi.partinvoiceid
-	INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
-	INNER JOIN paymentinfo p ON p.businessactionid = ba.businessactionid
-	WHERE ba.rawSTATUS = 2
-		AND pi.invoicetype NOT IN (2, 3)
-		AND abs(ba.rawoobamt) = invoicesubtotal
+	FROM maedata ba
+	INNER JOIN papartinvoice pi ON ba.rawdocumenttype = 1001
+		AND ba.rawSTATUS = 2
+		AND ba.rawdocumentid = pi.partinvoiceid
+	INNER JOIN papartinvoicetotals pit ON pi.partinvoiceid = pit.partinvoiceid
+	INNER JOIN paymentinfo p ON ba.businessactionid = p.businessactionid
+	WHERE pi.invoicetype NOT IN (2, 3)
+		AND ABS(ba.rawoobamt) = pit.invoicesubtotal
 		AND p.mopdescriptionsstr != ''
 		AND p.mopamount = 0
 		AND p.mopcount > 1
@@ -823,7 +818,7 @@ AS (
 		ba.businessactionid
 	HAVING sum(cip.amount) != rt.rototalnw
 	),
-dealoobins
+dealoobins -- NEEDS OPTIMIZATION
 AS (
 	SELECT ba.businessactionid
 	FROM sadealfinalization df
@@ -894,18 +889,18 @@ AS (
 	INNER JOIN comethodofpayment mop ON mop.arentryoption = 3
 		AND mop.methodofpaymentid = cip.methodofpaymentid
 	),
-extralinevendor
+extralinevendor -- optimized 
 AS (
 	SELECT ba.businessactionid
-	FROM sadealunitextraline l
-	LEFT JOIN apvendor v ON v.vendorid = l.apvendorid
-	INNER JOIN sadealunit du ON l.dealunitid = du.dealunitid
-	INNER JOIN sadeal d ON d.dealid = du.dealid
-	INNER JOIN sadealfinalization df ON df.dealid = d.dealid
-	INNER JOIN maedata ba ON ba.rawdocumentid = df.dealfinalizationid
+	FROM maedata ba
+	INNER JOIN sadealfinalization df ON ba.rawSTATUS = 4
+		AND ba.rawdocumentid = df.dealfinalizationid
+	INNER JOIN sadeal d ON df.dealid = d.dealid
+	INNER JOIN sadealunit du ON d.dealid = du.dealid
+	INNER JOIN sadealunitextraline l ON du.dealunitid = l.dealunitid
+	LEFT JOIN apvendor v ON l.apvendorid = v.vendorid
 	WHERE v.vendorid IS NULL
 		AND l.apvendorid != 0
-		AND ba.rawSTATUS = 4
 	GROUP BY ba.businessactionid
 	)
 SELECT ba.documentnumber AS document_number,
@@ -959,7 +954,8 @@ SELECT ba.documentnumber AS document_number,
 			THEN 'EVO-31748 Error Accessing Receiving Document Part Category | T2'
 		ELSE ''
 		END || CASE 
-		WHEN partinvoicescheduledmu.businessactionid IS NOT NULL -- Error Accessing On Part Receiving Document
+		WHEN partinvoicescheduledmu.businessactionid IS NOT NULL
+			OR partinvoicescheduledmu1.businessactionid IS NOT NULL -- Error Accessing On Part Receiving Document
 			THEN 'EVO-14901 Part Category Has MU Scheduled Inventory Account | T2'
 		ELSE ''
 		END || CASE 
@@ -1118,7 +1114,8 @@ LEFT JOIN erroraccrolabor2 earol2 ON earol2.businessactionid = ba.businessaction
 LEFT JOIN erroraccpicat eapicat ON eapicat.businessactionid = ba.businessactionid -- EVO-13570 Part Invoice Line with Bad Categoryid
 LEFT JOIN erroraccreceivepart earpcat ON earpcat.businessactionid = ba.businessactionid -- EVO-31748 Part Receiving Doc with Bad Categoryid
 LEFT JOIN erroraccmiscsaletype ON erroraccmiscsaletype.businessactionid = ba.businessactionid -- EVO-39691 RO with bad misc item categoryid
-LEFT JOIN partinvoicescheduledmu ON partinvoicescheduledmu.businessactionid = ba.businessactionid -- EVO-14901 Part on Invoice with MU Category
+LEFT JOIN partinvoicescheduledmu ON partinvoicescheduledmu.businessactionid = ba.businessactionid
+LEFT JOIN partinvoicescheduledmu1 ON partinvoicescheduledmu1.businessactionid = ba.businessactionid -- EVO-14901 Part invoice version
 LEFT JOIN subletcloseoutscheduledmu ON subletcloseoutscheduledmu.businessactionid = ba.businessactionid
 LEFT JOIN analysispending ON analysispending.businessactionid = ba.businessactionid
 LEFT JOIN invalidglnonpayro ON invalidglnonpayro.businessactionid = ba.businessactionid
@@ -1154,7 +1151,7 @@ LEFT JOIN armopinternalinvoice ON armopinternalinvoice.businessactionid = ba.bus
 LEFT JOIN oobwrongmopamountrepairorder ON oobwrongmopamountrepairorder.businessactionid = ba.businessactionid -- EVO-30796 Mop Amount less than Amount to Collect on RO
 LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.businessactionid -- EVO-31125
 LEFT JOIN taxroundingrepairorder ON taxroundingrepairorder.businessactionid = ba.businessactionid
-    AND oobmissingmopccmapping.businessactionid IS NULL
+	AND oobmissingmopccmapping.businessactionid IS NULL
 LEFT JOIN rentalmopdealdeposit ON rentalmopdealdeposit.businessactionid = ba.businessactionid -- EVO-41900
 LEFT JOIN dealunitbadsaletype ON dealunitbadsaletype.businessactionid = ba.businessactionid -- EVO-26651
 LEFT JOIN extralinevendor ON extralinevendor.businessactionid = ba.businessactionid -- EVO-40791
