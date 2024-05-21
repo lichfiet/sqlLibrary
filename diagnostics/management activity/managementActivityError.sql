@@ -441,7 +441,7 @@ invalidglblankmopinvoice
 AS (
 	SELECT b.businessactionid
 	FROM maedata b
-	LEFT JOIN papartinvoice p ON p.partinvoiceid = b.rawdocumentid
+	INNER JOIN papartinvoice p ON p.partinvoiceid = b.rawdocumentid
 		AND p.invoicetype NOT IN (2, 3)
 	INNER JOIN paymentinfo pi ON pi.businessactionid = b.businessactionid
 	WHERE b.rawSTATUS = 2
@@ -453,8 +453,8 @@ invalidglblankmopdeal -- potentially fixed, might needs to add something for ins
 AS (
 	SELECT b.businessactionid
 	FROM maedata b
-	LEFT JOIN sadealfinalization df ON df.dealfinalizationid = b.rawdocumentid
-	LEFT JOIN sadeal d ON df.dealid = d.dealid
+	INNER JOIN sadealfinalization df ON df.dealfinalizationid = b.rawdocumentid
+	INNER JOIN sadeal d ON df.dealid = d.dealid
 	INNER JOIN paymentinfo pi ON pi.businessactionid = b.businessactionid
 	WHERE b.rawSTATUS = 2
 		AND pi.mopdescriptionsstr = ''
