@@ -437,16 +437,29 @@ AS (
 		AND ma.rawstatus = 2
 	GROUP BY ma.businessactionid
 	),
-invalidgldealandinvoice -- BROKEN, cant differentiate between paid amount or deposit applied
+invalidglblankmopinvoice
 AS (
 	SELECT b.businessactionid
 	FROM maedata b
-	LEFT JOIN sadealfinalization df ON df.dealfinalizationid = b.rawdocumentid
 	LEFT JOIN papartinvoice p ON p.partinvoiceid = b.rawdocumentid
 		AND p.invoicetype NOT IN (2, 3)
 	INNER JOIN paymentinfo pi ON pi.businessactionid = b.businessactionid
 	WHERE b.rawSTATUS = 2
 		AND pi.mopdescriptionsstr = ''
+		AND p.partinvoiceid IS NOT NULL
+	GROUP BY b.businessactionid
+	),
+invalidglblankmopdeal -- potentially fixed, might needs to add something for insurance info or break these out into their own CTEs
+AS (
+	SELECT b.businessactionid
+	FROM maedata b
+	LEFT JOIN sadealfinalization df ON df.dealfinalizationid = b.rawdocumentid
+	LEFT JOIN sadeal d ON df.dealid = d.dealid
+	INNER JOIN paymentinfo pi ON pi.businessactionid = b.businessactionid
+	WHERE b.rawSTATUS = 2
+		AND pi.mopdescriptionsstr = ''
+		AND df.dealfinalizationid IS NOT NULL
+		AND d.balancetofinance != 0 -- fix me maybe to include insurance info
 	GROUP BY b.businessactionid
 	),
 invalidglclaimsubmission -- NEEDS OPTIMIZATION // small fix, move the AND clauses up into the joins if possible to eliminate extra joins
@@ -978,13 +991,12 @@ SELECT ba.documentnumber AS document_number,
 		WHEN invalidglnonpayro.businessactionid IS NOT NULL -- Invalid GL For Non-Pay Job on Repair Order
 			THEN 'EVO-34114 Invalid GL Account ID = 0 Non-Pay Repair Order | T2'
 		ELSE ''
-		END ||
-	/*	CASE removing this because it's brokebn 
-		WHEN invalidgldealandinvoice.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice // UNABLE TO DIFFERENTIATE BETWEEN DEPOSIT APPLIED AND NO PAYMENT
-			THEN 'EVO-35010'
-		ELSE 'N/A'
-		END AS invalidgldealandinvoice, */
-	CASE 
+		END || CASE 
+		WHEN invalidglblankmopinvoice.businessactionid IS NOT NULL
+			OR invalidglblankmopdeal.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice // UNABLE TO DIFFERENTIATE BETWEEN DEPOSIT APPLIED AND NO PAYMENT
+			THEN 'EVO-35010 Invalid GL Account ID = 0 blank MOP sales deal or part invoice | T2 '
+		ELSE ''
+		END || CASE 
 		WHEN invalidglclaimsubmission.businessactionid IS NOT NULL
 			THEN 'EVO-29577 Invalig GL Account ID = 0 Warranty Claim Submission | T1 Preapproved'
 		ELSE ''
@@ -1119,7 +1131,8 @@ LEFT JOIN partinvoicescheduledmu1 ON partinvoicescheduledmu1.businessactionid = 
 LEFT JOIN subletcloseoutscheduledmu ON subletcloseoutscheduledmu.businessactionid = ba.businessactionid
 LEFT JOIN analysispending ON analysispending.businessactionid = ba.businessactionid
 LEFT JOIN invalidglnonpayro ON invalidglnonpayro.businessactionid = ba.businessactionid
-LEFT JOIN invalidgldealandinvoice ON invalidgldealandinvoice.businessactionid = ba.businessactionid
+LEFT JOIN invalidglblankmopinvoice ON invalidglblankmopinvoice.businessactionid = ba.businessactionid -- EVO-35010
+LEFT JOIN invalidglblankmopdeal ON invalidglblankmopdeal.businessactionid = ba.businessactionid -- EVO-35010
 LEFT JOIN invalidglclaimsubmission ON invalidglclaimsubmission.businessactionid = ba.businessactionid -- EVO-29577
 LEFT JOIN schedacctnotvalidar ON schedacctnotvalidar.businessactionid = ba.businessactionid -- EVO-38907 AR Sched Acct not valid for MOP
 LEFT JOIN miscinvnonarmop ON miscinvnonarmop.businessactionid = ba.businessactionid -- EVO-33866 AR Sched Invalid for Misc Receipt
