@@ -718,6 +718,7 @@ AS (
 			)
 		AND so.isconversion = false
 		AND pil.dealadjustmentid IS NULL
+		AND abs(ba.rawoobamt) > 500 -- BUG FIX, MAY CAUSE ISSUES
 	GROUP BY ba.rawdocumentid,
 		ba.businessactionid
 	HAVING SUM(pil.depositapplied) <> MAX(pit.soldnowprepaidamount)
@@ -1045,7 +1046,7 @@ SELECT ba.documentnumber AS document_number,
 			THEN 'EVO-20828 Part Invoice OOB Missing Discounts on Lines | T2'
 		ELSE ''
 		END || CASE 
-		WHEN oobdepositapplied.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
+		WHEN oobdepositapplied.businessactionid IS NOT NULL -- potentially works, got flagged by 20828 diag but preapproved made that part of error go away
 			THEN 'EVO-17384 Part Invoice OOB Deposit Applied | T1'
 		ELSE ''
 		END || CASE 
