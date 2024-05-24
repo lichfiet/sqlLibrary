@@ -578,7 +578,7 @@ AS (
 	INNER JOIN maedata ba ON ba.rawdocumentid = da.dealadjustmentid
 	INNER JOIN maedata errortext ON errortext.businessactionid = ba.businessactionid
 	WHERE ba.rawstatus = 2
-		AND errortext.txt ilike '%Tax Entity not rounded%'
+		AND (errortext.txt ilike '%Tax Entity not rounded%' OR errortext.txt ilike '%Invalid Monetary Fraction%')
 	GROUP BY ba.businessactionid
 	
 	UNION
