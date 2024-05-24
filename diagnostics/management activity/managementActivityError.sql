@@ -590,7 +590,7 @@ AS (
 	INNER JOIN maedata ba ON ba.rawdocumentid = rp.rentalpostingid
 	INNER JOIN maedata errortext ON errortext.businessactionid = ba.businessactionid
 	WHERE ba.rawstatus = 2
-		AND errortext.txt ilike '%Tax Entity not rounded%'
+		AND (errortext.txt ilike '%Tax Entity not rounded%' OR errortext.txt ilike '%Invalid Monetary Fraction%')
 	GROUP BY ba.businessactionid
 	),
 dealunitid1 -- https://lightspeeddms.atlassian.net/browse/EVO-21635 -- NEEDS OPTIMIZATION // move around joins
@@ -875,6 +875,27 @@ AS (
 	HAVING p.mopcount = 1
 		AND p.mopamount != a.balancetofinance
 	),
+dupetaxrepairorder
+AS (
+	SELECT DISTINCT ba.businessactionid
+	FROM serepairordertaxentity rote
+	INNER JOIN serepairordertaxitem roti ON roti.repairordertaxitemid = rote.repairordertaxitemid
+	INNER JOIN maedata ba ON ba.rawoobamt != 0
+		AND ba.rawdocumentid = roti.repairorderid
+	INNER JOIN (
+		SELECT repairordertaxitemid AS myid,
+			ROW_NUMBER() OVER (
+				PARTITION BY taxcategoryid,
+				description,
+				groupid,
+				taxtype,
+				taxamount ORDER BY repairordertaxitemid ASC
+				) AS Row
+		FROM serepairordertaxitem
+		) dup ON dup.myid = roti.repairordertaxitemid
+	WHERE rote.storeid = ba.storeid
+		AND dup.row > 1
+	),
 taxroundingrepairorder -- heavily modified 13501 NOT VERIFIED TO WORK yet 
 AS (
 	SELECT businessactionid
@@ -1113,6 +1134,10 @@ SELECT ba.documentnumber AS document_number,
 		WHEN extralinevendor.businessactionid IS NOT NULL
 			THEN 'EVO-40791 Pending deal, cannot get vendorName, vendorid null | T1, See CR For Details'
 		ELSE ''
+		END || CASE 
+		WHEN dupetaxrepairorder.businessactionid IS NOT NULL
+			THEN 'EVO-34321 Duplicate Taxes on Repair Order | T2'
+		ELSE ''
 		END AS issue_description_and_cr,
 	CASE 
 		WHEN ba.oobamt != 0
@@ -1170,6 +1195,7 @@ LEFT JOIN rentalmopdealdeposit ON rentalmopdealdeposit.businessactionid = ba.bus
 LEFT JOIN dealunitbadsaletype ON dealunitbadsaletype.businessactionid = ba.businessactionid -- EVO-26651
 LEFT JOIN extralinevendor ON extralinevendor.businessactionid = ba.businessactionid -- EVO-40791
 LEFT JOIN partinvoicemubadsaletype ON partinvoicemubadsaletype.businessactionid = ba.businessactionid -- EVO-14158
+LEFT JOIN dupetaxrepairorder ON dupetaxrepairorder.businessactionid = ba.businessactionid -- EVO-34321
 WHERE ba.rawSTATUS IN (2, 4)
 ORDER BY ba.storename ASC,
 	ba.rawdocumentdate DESC;
