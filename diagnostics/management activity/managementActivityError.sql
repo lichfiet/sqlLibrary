@@ -192,7 +192,7 @@ AS (
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = mop.glacct
 	WHERE ma.rawSTATUS = 2
 		AND ma.rawtxt ilike '%Not Valid%'
-		AND 0 = ALL (pyi.arcustomerids)
+		AND 0 != ALL (pyi.arcustomerids)
 	GROUP BY ma.businessactionid
 	HAVING sum(coa.schedule) = 0
 	),
