@@ -407,9 +407,11 @@ AS (
 	FROM sesubletcloseout sc
 	INNER JOIN serepairordersublet rs ON rs.repairordersubletid = sc.subletlaborid
 	INNER JOIN serepairorderjob roj ON roj.repairorderjobid = rs.repairorderjobid
+	INNER JOIN serepairorderunit rou on rou.repairorderunitid = roj.repairorderunitid
 	INNER JOIN cocategory c ON c.categoryid = sc.categoryid
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = c.glinventory
 	INNER JOIN maedata ba ON ba.rawdocumentid = sc.subletcloseoutid
+	    OR ba.rawdocumentid = rou.repairorderid
 	WHERE coa.schedule != 0
 		AND ba.rawstatus = 2
 	GROUP BY ba.businessactionid
