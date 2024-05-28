@@ -1086,7 +1086,7 @@ SELECT ba.documentnumber AS document_number,
 		ELSE ''
 		END || CASE 
 		WHEN oobhandlingpartinvoice.businessactionid IS NOT NULL -- Semi-verified
-			THEN 'EVO-37782 Part Invoice OOB Handling Amt, Not Non-Pay | T2'
+			THEN 'EVO-37782 Part Invoice OOB Handling Amt | T2'
 		ELSE ''
 		END || CASE 
 		WHEN oobzerosummoppartinvoice.businessactionid IS NOT NULL
