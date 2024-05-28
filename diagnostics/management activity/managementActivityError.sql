@@ -1101,10 +1101,6 @@ SELECT ba.documentnumber AS document_number,
 			THEN 'EVO-17198 Part Invoice OOB Tax Not Rounded Properly | T1 Preapproved'
 		ELSE ''
 		END || CASE 
-		WHEN groupfordealunitid.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
-			THEN 'EVO-16159 Could Not Find Geoup For Deal Unit ID | T2'
-		ELSE ''
-		END || CASE 
 		WHEN oobmissingmoppartinvoice.businessactionid IS NOT NULL
 			THEN 'EVO-39505 Invoice OOB paid with Blank Method of Payment 0$ | T2'
 		ELSE ''
