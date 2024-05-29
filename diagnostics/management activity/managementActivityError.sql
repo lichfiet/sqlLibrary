@@ -167,7 +167,7 @@ AS (
 	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
 	GROUP BY ba.businessactionid
 	),
-negativedealtax -- NEEDS OPTIMIZATION
+negativedealtax -- NEEDS OPTIMIZATION, combine with one below and do a custom casewhen and then update the casewhen for issue description
 AS (
 	SELECT businessactionid
 	FROM sadeal d
@@ -177,6 +177,24 @@ AS (
 	INNER JOIN maedata ba ON ba.rawdocumentid = df.dealfinalizationid
 	WHERE dut.taxpct <> 0
 		AND dut.taxableamt <> 0
+		AND dut.taxamt = 0
+		AND df.actualfinalizationdate < '2024-05-20 T00:00:00+00:00'
+		AND ba.rawSTATUS = 2
+	GROUP BY ba.businessactionid,
+		ba.rawoobamt
+	HAVING SUM(ROUND((ROUND(dut.taxableamt::FLOAT / 10000) * (dut.taxpct::FLOAT / 1000000))::NUMERIC * 10000, 0)) != sum(dut.taxamt)
+	),
+negativedealtaxnew -- NEEDS OPTIMIZATION
+AS (
+	SELECT businessactionid
+	FROM sadeal d
+	INNER JOIN sadealunit du using (dealid)
+	INNER JOIN sadealunittax dut using (dealunitid)
+	INNER JOIN sadealfinalization df ON df.dealid = du.dealid
+	INNER JOIN maedata ba ON ba.rawdocumentid = df.dealfinalizationid
+	WHERE dut.taxpct <> 0
+		AND dut.taxableamt <> 0
+		AND df.actualfinalizationdate > '2024-05-20 T00:00:00+00:00'
 		AND dut.taxamt = 0
 		AND ba.rawSTATUS = 2
 	GROUP BY ba.businessactionid,
@@ -1081,6 +1099,10 @@ SELECT ba.documentnumber AS document_number,
 			THEN 'EVO-18151 Deal OOB By Negative Tax Lines | T1'
 		ELSE ''
 		END || CASE 
+		WHEN negativedealtaxnew.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
+			THEN 'EVO-42036 Deal OOB By Negative Tax Lines | T2'
+		ELSE ''
+		END || CASE 
 		WHEN oobnonpaypartinvoice.businessactionid IS NOT NULL -- Semi-verified
 			THEN 'EVO-39247 Part Invoice OOB Non-Pay Handling Amt | T2'
 		ELSE ''
@@ -1168,6 +1190,7 @@ LEFT JOIN taxiddeal2 ON taxiddeal2.businessactionid = ba.businessactionid -- EVO
 LEFT JOIN dealtaxroundpenny ON dealtaxroundpenny.businessactionid = ba.businessactionid -- EVO-17784
 LEFT JOIN taxidpartinvoice1 ON taxidpartinvoice1.businessactionid = ba.businessactionid -- EVO-35995 
 LEFT JOIN negativedealtax ON negativedealtax.businessactionid = ba.businessactionid -- EVO-18151 
+LEFT JOIN negativedealtaxnew ON negativedealtaxnew.businessactionid = ba.businessactionid -- EVO-42036 
 LEFT JOIN tradedealid ON tradedealid.businessactionid = ba.businessactionid -- EVO-22520 Deal Trade MAE with invalid tradedealid
 LEFT JOIN dealunitid1 ON dealunitid1.businessactionid = ba.businessactionid -- EVO-21635 Deal Unit ID linking to invalid dealunit
 LEFT JOIN mutransferstoreid ON mutransferstoreid.businessactionid = ba.businessactionid -- EVO-21635 Deal Unit ID linking to invalid dealunit
