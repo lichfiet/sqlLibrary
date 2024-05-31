@@ -467,6 +467,7 @@ AS (
 	WHERE b.rawSTATUS = 2
 		AND pi.mopdescriptionsstr = ''
 		AND p.partinvoiceid IS NOT NULL
+		AND pi.mopamount != 0
 	GROUP BY b.businessactionid
 	),
 invalidglblankmopdeal -- potentially fixed, might needs to add something for insurance info or break these out into their own CTEs
@@ -480,6 +481,7 @@ AS (
 		AND pi.mopdescriptionsstr = ''
 		AND df.dealfinalizationid IS NOT NULL
 		AND d.balancetofinance != 0 -- fix me maybe to include insurance info
+		AND pi.mopamount != 0
 	GROUP BY b.businessactionid
 	),
 invalidglclaimsubmission -- NEEDS OPTIMIZATION // small fix, move the AND clauses up into the joins if possible to eliminate extra joins
@@ -681,6 +683,8 @@ AS (
 				)
 		SELECT ba.businessactionid
 		FROM maedata ba
+		INNER JOIN paymentinfo pyi on pyi.businessactionid = ba.businessactionid
+		    AND pyi.mopamount != 0
 		INNER JOIN papartinvoiceline pi ON ba.rawdocumenttype = 1001
 			AND ba.rawdocumentid = pi.partinvoiceid
 		INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
@@ -818,7 +822,7 @@ AS (
 	INNER JOIN paymentinfo pyi ON pyi.businessactionid = ba.businessactionid
 	WHERE ba.rawSTATUS = 2
 		AND pi.invoicetype NOT IN (2, 3)
-		AND ba.oobamt = pit.soldnowsubtotal
+		AND ABS(ba.rawoobamt) = ABS(pit.soldnowsubtotal)
 		AND pyi.mopdescriptionsstr = ''
 		AND pyi.mopamount = 0
 	),
