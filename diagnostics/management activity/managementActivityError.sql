@@ -465,9 +465,10 @@ AS (
 		AND p.invoicetype NOT IN (2, 3)
 	INNER JOIN paymentinfo pi ON pi.businessactionid = b.businessactionid
 	WHERE b.rawSTATUS = 2
-		AND pi.mopdescriptionsstr != ''
+		AND pi.mopdescriptionsstr = ''
 		AND p.partinvoiceid IS NOT NULL
 		AND pi.mopamount != 0
+		AND b.rawoobamt != 0
 	GROUP BY b.businessactionid
 	),
 invalidglblankmopdeal -- potentially fixed, might needs to add something for insurance info or break these out into their own CTEs
@@ -478,10 +479,11 @@ AS (
 	INNER JOIN sadeal d ON df.dealid = d.dealid
 	INNER JOIN paymentinfo pi ON pi.businessactionid = b.businessactionid
 	WHERE b.rawSTATUS = 2
-		AND pi.mopdescriptionsstr != ''
+		AND pi.mopdescriptionsstr = ''
 		AND df.dealfinalizationid IS NOT NULL
 		AND d.balancetofinance != 0 -- fix me maybe to include insurance info
 		AND pi.mopamount != 0
+		AND b.rawoobamt != 0
 	GROUP BY b.businessactionid
 	),
 invalidglclaimsubmission -- NEEDS OPTIMIZATION // small fix, move the AND clauses up into the joins if possible to eliminate extra joins
