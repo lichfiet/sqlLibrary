@@ -425,11 +425,11 @@ AS (
 	FROM sesubletcloseout sc
 	INNER JOIN serepairordersublet rs ON rs.repairordersubletid = sc.subletlaborid
 	INNER JOIN serepairorderjob roj ON roj.repairorderjobid = rs.repairorderjobid
-	INNER JOIN serepairorderunit rou on rou.repairorderunitid = roj.repairorderunitid
+	INNER JOIN serepairorderunit rou ON rou.repairorderunitid = roj.repairorderunitid
 	INNER JOIN cocategory c ON c.categoryid = sc.categoryid
 	INNER JOIN glchartofaccounts coa ON coa.acctdeptid = c.glinventory
 	INNER JOIN maedata ba ON ba.rawdocumentid = sc.subletcloseoutid
-	    OR ba.rawdocumentid = rou.repairorderid
+		OR ba.rawdocumentid = rou.repairorderid
 	WHERE coa.schedule != 0
 		AND ba.rawstatus = 2
 	GROUP BY ba.businessactionid
@@ -600,7 +600,10 @@ AS (
 	INNER JOIN maedata ba ON ba.rawdocumentid = da.dealadjustmentid
 	INNER JOIN maedata errortext ON errortext.businessactionid = ba.businessactionid
 	WHERE ba.rawstatus = 2
-		AND (errortext.txt ilike '%Tax Entity not rounded%' OR errortext.txt ilike '%Invalid Monetary Fraction%')
+		AND (
+			errortext.txt ilike '%Tax Entity not rounded%'
+			OR errortext.txt ilike '%Invalid Monetary Fraction%'
+			)
 	GROUP BY ba.businessactionid
 	
 	UNION
@@ -612,7 +615,10 @@ AS (
 	INNER JOIN maedata ba ON ba.rawdocumentid = rp.rentalpostingid
 	INNER JOIN maedata errortext ON errortext.businessactionid = ba.businessactionid
 	WHERE ba.rawstatus = 2
-		AND (errortext.txt ilike '%Tax Entity not rounded%' OR errortext.txt ilike '%Invalid Monetary Fraction%')
+		AND (
+			errortext.txt ilike '%Tax Entity not rounded%'
+			OR errortext.txt ilike '%Invalid Monetary Fraction%'
+			)
 	GROUP BY ba.businessactionid
 	),
 dealunitid1 -- https://lightspeeddms.atlassian.net/browse/EVO-21635 -- NEEDS OPTIMIZATION // move around joins
@@ -683,8 +689,8 @@ AS (
 				)
 		SELECT ba.businessactionid
 		FROM maedata ba
-		INNER JOIN paymentinfo pyi on pyi.businessactionid = ba.businessactionid
-		    AND pyi.mopamount != 0
+		INNER JOIN paymentinfo pyi ON pyi.businessactionid = ba.businessactionid
+			AND pyi.mopamount != 0
 		INNER JOIN papartinvoiceline pi ON ba.rawdocumenttype = 1001
 			AND ba.rawdocumentid = pi.partinvoiceid
 		INNER JOIN papartinvoicetotals pit ON pit.partinvoiceid = pi.partinvoiceid
@@ -948,6 +954,19 @@ AS (
 	INNER JOIN comethodofpayment mop ON mop.arentryoption = 3
 		AND mop.methodofpaymentid = cip.methodofpaymentid
 	),
+invalidglrentalblankmop
+AS (
+	SELECT ba.businessactionid
+	FROM mabusinessaction ba
+	INNER JOIN paymentinfo pi ON ba.businessactionid = pi.businessactionid
+	WHERE ba.STATUS = 2
+		AND ba.documenttype = 4002
+		AND (
+			pi.mopcount > 1
+			OR pi.mopamount < 0
+			)
+		AND '' = ANY (pi.mopdescriptionsarr)
+	),
 extralinevendor -- optimized 
 AS (
 	SELECT ba.businessactionid
@@ -1111,6 +1130,10 @@ SELECT ba.documentnumber AS document_number,
 			THEN 'EVO-39247 Part Invoice OOB Non-Pay Handling Amt | T2'
 		ELSE ''
 		END || CASE 
+		WHEN invalidglrentalblankmop.businessactionid IS NOT NULL -- Semi-verified
+			THEN 'EVO-35588 Invalid GL Blank Rental MOP | T2'
+		ELSE ''
+		END || CASE 
 		WHEN oobhandlingpartinvoice.businessactionid IS NOT NULL -- Semi-verified
 			THEN 'EVO-37782 Part Invoice OOB Handling Amt | T2'
 		ELSE ''
@@ -1217,6 +1240,7 @@ LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.bus
 LEFT JOIN taxroundingrepairorder ON taxroundingrepairorder.businessactionid = ba.businessactionid
 	AND oobmissingmopccmapping.businessactionid IS NULL
 LEFT JOIN rentalmopdealdeposit ON rentalmopdealdeposit.businessactionid = ba.businessactionid -- EVO-41900
+LEFT JOIN invalidglrentalblankmop ON invalidglrentalblankmop.businessactionid = ba.businessactionid -- EVO-35588
 LEFT JOIN dealunitbadsaletype ON dealunitbadsaletype.businessactionid = ba.businessactionid -- EVO-26651
 LEFT JOIN extralinevendor ON extralinevendor.businessactionid = ba.businessactionid -- EVO-40791
 LEFT JOIN partinvoicemubadsaletype ON partinvoicemubadsaletype.businessactionid = ba.businessactionid -- EVO-14158
