@@ -992,15 +992,15 @@ SELECT ba.documentnumber AS document_number,
 		WHEN ba.storeid = 0
 			AND ba.rawdocumentid = 0
 			AND ba.rawstatus = 2
-			THEN 'EVO-20030 Document Missing from MAE List | T1 Preapproved'
+			THEN 'EVO-20030 Document Missing from MAE List | T1 Preapproved '
 		ELSE ''
 		END || CASE 
 		WHEN schedacctnotvalidar.businessactionid IS NOT NULL
-			THEN 'EVO-38097 Scheduled Not Valid for A/R Customerid XXXXX PSS Items | T1 Preapproved'
+			THEN 'EVO-38097 Scheduled Not Valid for A/R Customerid XXXXX PSS Items | T1 Preapproved '
 		ELSE ''
 		END || CASE 
 		WHEN miscinvnonarmop.businessactionid IS NOT NULL
-			THEN 'EVO-33866 Scheduled Not Valid for A/R Customerid XXXXX Misc Receipt | T2'
+			THEN 'EVO-33866 Scheduled Not Valid for A/R Customerid XXXXX Misc Receipt | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN dealarglaccount.businessactionid IS NOT NULL
@@ -1008,16 +1008,16 @@ SELECT ba.documentnumber AS document_number,
 		ELSE ''
 		END || CASE 
 		WHEN earop.businessactionid IS NOT NULL
-			THEN 'EVO-26911 Error Accessing RO Part Category | T2'
+			THEN 'EVO-26911 Error Accessing RO Part Category | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN rentalmopdealdeposit.businessactionid IS NOT NULL
-			THEN 'EVO-33052 Deal Deposit, No ReservationID For Account XXXX  | T2'
+			THEN 'EVO-33052 Deal Deposit, No ReservationID For Account XXXX  | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN earol.businessactionid IS NOT NULL
 			OR earol2.businessactionid IS NOT NULL
-			THEN 'EVO-18036 Error Accessing RO Labor Category | T2'
+			THEN 'EVO-18036 Error Accessing RO Labor Category | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN erroraccmiscsaletype.businessactionid IS NOT NULL
@@ -1025,36 +1025,36 @@ SELECT ba.documentnumber AS document_number,
 		ELSE ''
 		END || CASE 
 		WHEN eapicat.businessactionid IS NOT NULL -- Error Accessing on Part Invoice // Verified Diag To Work
-			THEN 'EVO-13570 Error Accessing Part Invoice Category | T2'
+			THEN 'EVO-13570 Error Accessing Part Invoice Category | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN earpcat.businessactionid IS NOT NULL -- Error Accessing On Part Receiving Document
-			THEN 'EVO-31748 Error Accessing Receiving Document Part Category | T2'
+			THEN 'EVO-31748 Error Accessing Receiving Document Part Category | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN partinvoicescheduledmu.businessactionid IS NOT NULL
 			OR partinvoicescheduledmu1.businessactionid IS NOT NULL -- Error Accessing On Part Receiving Document
-			THEN 'EVO-14901 Part Category Has MU Scheduled Inventory Account | T2'
+			THEN 'EVO-14901 Part Category Has MU Scheduled Inventory Account | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN partinvoicemubadsaletype.businessactionid IS NOT NULL -- EVO-14158
-			THEN 'EVO-14158 Part Invoice Non Sales Saletype on Internal Invoice | T2'
+			THEN 'EVO-14158 Part Invoice Non Sales Saletype on Internal Invoice | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN subletcloseoutscheduledmu.businessactionid IS NOT NULL
-			THEN 'EVO-13300 Sublet Category Has MU Scheduled Inventory Account | T2'
+			THEN 'EVO-13300 Sublet Category Has MU Scheduled Inventory Account | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN analysispending.businessactionid IS NOT NULL -- Analysis Pending On Part Receiving Document
-			THEN 'EVO-29301 Analysis Pending on Part Receiving Document | T1 Preapproved'
+			THEN 'EVO-29301 Analysis Pending on Part Receiving Document | T1 Preapproved '
 		ELSE ''
 		END || CASE 
 		WHEN dealunitbadsaletype.businessactionid IS NOT NULL -- Analysis Pending On Part Receiving Document
-			THEN 'EVO-26651 Error Accessing Category ID, Bad Saletype on deal | T1 Preapproved'
+			THEN 'EVO-26651 Error Accessing Category ID, Bad Saletype on deal | T1 Preapproved '
 		ELSE ''
 		END || CASE 
 		WHEN invalidglnonpayro.businessactionid IS NOT NULL -- Invalid GL For Non-Pay Job on Repair Order
-			THEN 'EVO-34114 Invalid GL Account ID = 0 Non-Pay Repair Order | T2'
+			THEN 'EVO-34114 Invalid GL Account ID = 0 Non-Pay Repair Order | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN invalidglblankmopinvoice.businessactionid IS NOT NULL
@@ -1063,23 +1063,23 @@ SELECT ba.documentnumber AS document_number,
 		ELSE ''
 		END || CASE 
 		WHEN invalidglclaimsubmission.businessactionid IS NOT NULL
-			THEN 'EVO-29577 Invalig GL Account ID = 0 Warranty Claim Submission | T1 Preapproved'
+			THEN 'EVO-29577 Invalig GL Account ID = 0 Warranty Claim Submission | T1 Preapproved '
 		ELSE ''
 		END || CASE 
 		WHEN taxidrental.businessactionid IS NOT NULL -- Rental Reservation with bad taxid
-			THEN 'EVO-12777 Could not Locate Tax Entity Reservation | T2'
+			THEN 'EVO-12777 Could not Locate Tax Entity Reservation | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN longvaltax.businessactionid IS NOT NULL
-			THEN 'EVO-37225 Invalid Monetary Fraction XXX Document, Long Value Tax | T2'
+			THEN 'EVO-37225 Invalid Monetary Fraction XXX Document, Long Value Tax | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN taxiddeal1.businessactionid IS NOT NULL -- Deal with bad taxid linked to diff store
-			THEN 'EVO-9836 Error Getting Unit Tax Information | T2'
+			THEN 'EVO-9836 Error Getting Unit Tax Information | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN taxiddeal2.businessactionid IS NOT NULL -- Deal with bad taxid linked to diff store
-			THEN 'EVO-26472 Error Updating Accounting | T1 Preapproved'
+			THEN 'EVO-26472 Error Updating Accounting | T1 Preapproved '
 		ELSE ''
 		END || CASE 
 		WHEN dealtaxroundpenny.businessactionid IS NOT NULL -- deal out of balance by a penny due to tax rounding
@@ -1087,7 +1087,7 @@ SELECT ba.documentnumber AS document_number,
 		ELSE ''
 		END || CASE 
 		WHEN taxidpartinvoice1.businessactionid IS NOT NULL -- part invoice tax entity with bad taxentityid https://lightspeeddms.atlassian.net/browse/EVO-35995
-			THEN 'EVO-35995 Could Not Locate Tax Entity XXX | T2'
+			THEN 'EVO-35995 Could Not Locate Tax Entity XXX | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN tradedealid.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
@@ -1095,19 +1095,19 @@ SELECT ba.documentnumber AS document_number,
 		ELSE ''
 		END || CASE 
 		WHEN dealunitid1.businessactionid IS NOT NULL -- MU with bad dealunitid // NOT TESTED, PLEASE CORRECT IF NOT WORKING
-			THEN 'EVO-21635 Error Accessing, RO Unit with Bad Deal ID | T1 Preapproved'
+			THEN 'EVO-21635 Error Accessing, RO Unit with Bad Deal ID | T1 Preapproved '
 		ELSE ''
 		END || CASE 
 		WHEN groupfordealunitid.businessactionid IS NOT NULL -- MU with bad dealunitid // NOT TESTED, PLEASE CORRECT IF NOT WORKING
-			THEN 'EVO-16159 Cant find group for dealunitid | T2'
+			THEN 'EVO-16159 Cant find group for dealunitid | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN oobdupepartinvoice.businessactionid IS NOT NULL -- Tested and confirmed Duplicate Part invoice / SO
-			THEN 'EVO-36594 Duplicate Part Invoice / SO | T2'
+			THEN 'EVO-36594 Duplicate Part Invoice / SO | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN oobmissingdiscountpartinvoice.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
-			THEN 'EVO-20828 Part Invoice OOB Missing Discounts on Lines | T2'
+			THEN 'EVO-20828 Part Invoice OOB Missing Discounts on Lines | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN oobdepositapplied.businessactionid IS NOT NULL -- potentially works, got flagged by 20828 diag but preapproved made that part of error go away
@@ -1123,59 +1123,59 @@ SELECT ba.documentnumber AS document_number,
 		ELSE ''
 		END || CASE 
 		WHEN negativedealtaxnew.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
-			THEN 'EVO-42036 Deal OOB By Negative Tax Lines | T2'
+			THEN 'EVO-42036 Deal OOB By Negative Tax Lines | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN oobnonpaypartinvoice.businessactionid IS NOT NULL -- Semi-verified
-			THEN 'EVO-39247 Part Invoice OOB Non-Pay Handling Amt | T2'
+			THEN 'EVO-39247 Part Invoice OOB Non-Pay Handling Amt | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN invalidglrentalblankmop.businessactionid IS NOT NULL -- Semi-verified
-			THEN 'EVO-35588 Invalid GL Blank Rental MOP | T2'
+			THEN 'EVO-35588 Invalid GL Blank Rental MOP | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN oobhandlingpartinvoice.businessactionid IS NOT NULL -- Semi-verified
-			THEN 'EVO-37782 Part Invoice OOB Handling Amt | T2'
+			THEN 'EVO-37782 Part Invoice OOB Handling Amt | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN oobzerosummoppartinvoice.businessactionid IS NOT NULL
-			THEN 'EVO-31037 Part Invoice Payment Refunded invoice amount | T2'
+			THEN 'EVO-31037 Part Invoice Payment Refunded invoice amount | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN armopinternalinvoice.businessactionid IS NOT NULL
-			THEN 'EVO-31066 Internal Invoice Using AR MOP | T1 Preapproved'
+			THEN 'EVO-31066 Internal Invoice Using AR MOP | T1 Preapproved '
 		ELSE ''
 		END || CASE 
 		WHEN taxoobpartinvoice.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
-			THEN 'EVO-17198 Part Invoice OOB Tax Not Rounded Properly | T1 Preapproved'
+			THEN 'EVO-17198 Part Invoice OOB Tax Not Rounded Properly | T1 Preapproved '
 		ELSE ''
 		END || CASE 
 		WHEN oobmissingmoppartinvoice.businessactionid IS NOT NULL
-			THEN 'EVO-39505 Invoice OOB paid with Blank Method of Payment 0$ | T2'
+			THEN 'EVO-39505 Invoice OOB paid with Blank Method of Payment 0$ | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN oobmissingmopccmapping.businessactionid IS NOT NULL
-			THEN 'EVO-38574 Invalid GL Account ID = 0, CC Mop Bad System Preferences Mapping | T2'
+			THEN 'EVO-38574 Invalid GL Account ID = 0, CC Mop Bad System Preferences Mapping | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN oobwrongmopamountrepairorder.businessactionid IS NOT NULL -- Invalid GL for MOP on Sales Deal or Part Invoice
-			THEN 'EVO-30796 Repair Order OOB Method of Payment Amount Incorrect | T2'
+			THEN 'EVO-30796 Repair Order OOB Method of Payment Amount Incorrect | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN dealoobins.businessactionid IS NOT NULL -- VERIFIED
-			THEN 'EVO-24051 Deal OOB insurance Forces Negative Balance to Finance | T2'
+			THEN 'EVO-24051 Deal OOB insurance Forces Negative Balance to Finance | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN oobwrongamtsalesdeal.businessactionid IS NOT NULL -- VERIFIED
-			THEN 'EVO-31125 Sales Deal OOB Method of Payment != Balance to Finance | T1 Preapproved'
+			THEN 'EVO-31125 Sales Deal OOB Method of Payment != Balance to Finance | T1 Preapproved '
 		ELSE ''
 		END || CASE 
 		WHEN mutransferstoreid.businessactionid IS NOT NULL -- VERIFIED
-			THEN 'EVO-31390 Major Unit Transfer with Bad MU Sales Category | T2'
+			THEN 'EVO-31390 Major Unit Transfer with Bad MU Sales Category | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN taxroundingrepairorder.businessactionid IS NOT NULL -- NOT VERIFIED WAITING TO TEST
-			THEN 'EVO-13501 Tax Entity not rounded Repair Order | T1 Preapproved'
+			THEN 'EVO-13501 Tax Entity not rounded Repair Order | T1 Preapproved '
 		ELSE ''
 		END || CASE 
 		WHEN extralinevendor.businessactionid IS NOT NULL
@@ -1183,7 +1183,7 @@ SELECT ba.documentnumber AS document_number,
 		ELSE ''
 		END || CASE 
 		WHEN dupetaxrepairorder.businessactionid IS NOT NULL
-			THEN 'EVO-34321 Duplicate Taxes on Repair Order | T2'
+			THEN 'EVO-34321 Duplicate Taxes on Repair Order | T2 '
 		ELSE ''
 		END AS issue_description_and_cr,
 	CASE 
