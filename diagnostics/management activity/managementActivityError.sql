@@ -465,7 +465,7 @@ AS (
 		AND p.invoicetype NOT IN (2, 3)
 	INNER JOIN paymentinfo pi ON pi.businessactionid = b.businessactionid
 	WHERE b.rawSTATUS = 2
-		AND pi.mopdescriptionsstr = ''
+		AND pi.mopdescriptionsstr != ''
 		AND p.partinvoiceid IS NOT NULL
 		AND pi.mopamount != 0
 	GROUP BY b.businessactionid
@@ -478,7 +478,7 @@ AS (
 	INNER JOIN sadeal d ON df.dealid = d.dealid
 	INNER JOIN paymentinfo pi ON pi.businessactionid = b.businessactionid
 	WHERE b.rawSTATUS = 2
-		AND pi.mopdescriptionsstr = ''
+		AND pi.mopdescriptionsstr != ''
 		AND df.dealfinalizationid IS NOT NULL
 		AND d.balancetofinance != 0 -- fix me maybe to include insurance info
 		AND pi.mopamount != 0
