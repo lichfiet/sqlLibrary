@@ -817,7 +817,7 @@ AS (
 	FROM maedata ba
 	INNER JOIN paymentinfo cip ON cip.businessactionid = ba.businessactionid
 	INNER JOIN cocreditcardtransaction ct ON ct.documentid = ba.rawdocumentid
-	WHERE cip.mopdescriptionsstr = ''
+	WHERE '' != ALL (cip.mopdescriptionsarr)
 		AND cip.mopamount != 0
 		AND ba.rawstatus = 2
 	),
@@ -831,7 +831,7 @@ AS (
 	WHERE ba.rawSTATUS = 2
 		AND pi.invoicetype NOT IN (2, 3)
 		AND ABS(ba.rawoobamt) = ABS(pit.soldnowsubtotal)
-		AND pyi.mopdescriptionsstr = ''
+		AND '' != ALL (pyi.mopdescriptionsarr)
 		AND pyi.mopamount = 0
 	),
 oobzerosummoppartinvoice -- optimized
@@ -846,7 +846,7 @@ AS (
 	INNER JOIN paymentinfo p ON ba.businessactionid = p.businessactionid
 	WHERE pi.invoicetype NOT IN (2, 3)
 		AND ABS(ba.rawoobamt) = pit.invoicesubtotal
-		AND p.mopdescriptionsstr != ''
+		AND '' != ALL (p.mopdescriptionsarr)
 		AND p.mopamount = 0
 		AND p.mopcount > 1
 	),
@@ -899,7 +899,11 @@ AS (
 	INNER JOIN maedata b ON b.rawdocumentid = df.dealfinalizationid
 	INNER JOIN paymentinfo p ON p.businessactionid = b.businessactionid
 	WHERE B.rawSTATUS = 2
-	    AND p.mopdescriptionsstr = ''
+		AND (
+			'' != ALL (p.mopdescriptionsarr)
+			OR mopdescriptionsstr IS NULL
+			)
+		AND p.mopamount != 0
 	GROUP BY a.balancetofinance,
 		p.businessactionid,
 		b.businessactionid,
@@ -955,6 +959,21 @@ AS (
 		AND ci.invoicenumber::VARCHAR = ba.invoicenumber
 	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
 	INNER JOIN comethodofpayment mop ON mop.arentryoption = 3
+		AND mop.methodofpaymentid = cip.methodofpaymentid
+	),
+blankmopdealdeposit -- need to convert to '' != ALL (p.mopdescriptionsarr)
+AS (
+	SELECT ba.businessactionid
+	FROM maedata ba
+	INNER JOIN cocommoninvoice ci ON ba.rawSTATUS = 2 -- ma is in error status
+		AND ba.rawdocumenttype = 3002 -- deal depoosit
+		AND ci.invoicenumber::VARCHAR = ba.invoicenumber
+	INNER JOIN cocommoninvoicepayment cip ON cip.commoninvoiceid = ci.commoninvoiceid
+	INNER JOIN comethodofpayment mop ON (
+			mop.description = ''
+			OR mop.description = NULL
+			)
+		AND cip.amount != 0
 		AND mop.methodofpaymentid = cip.methodofpaymentid
 	),
 invalidglrentalblankmop
@@ -1016,6 +1035,10 @@ SELECT ba.documentnumber AS document_number,
 		END || CASE 
 		WHEN rentalmopdealdeposit.businessactionid IS NOT NULL
 			THEN 'EVO-33052 Deal Deposit, No ReservationID For Account XXXX  | T2 '
+		ELSE ''
+		END || CASE 
+		WHEN blankmopdealdeposit.businessactionid IS NOT NULL
+			THEN 'EVO-29597 Deal Deposit, Invalid GL ID = 0, Blank MOP  | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN earol.businessactionid IS NOT NULL
@@ -1243,6 +1266,7 @@ LEFT JOIN oobwrongamtsalesdeal ON oobwrongamtsalesdeal.businessactionid = ba.bus
 LEFT JOIN taxroundingrepairorder ON taxroundingrepairorder.businessactionid = ba.businessactionid
 	AND oobmissingmopccmapping.businessactionid IS NULL
 LEFT JOIN rentalmopdealdeposit ON rentalmopdealdeposit.businessactionid = ba.businessactionid -- EVO-41900
+LEFT JOIN blankmopdealdeposit ON blankmopdealdeposit.businessactionid = ba.businessactionid -- EVO-29597
 LEFT JOIN invalidglrentalblankmop ON invalidglrentalblankmop.businessactionid = ba.businessactionid -- EVO-35588
 LEFT JOIN dealunitbadsaletype ON dealunitbadsaletype.businessactionid = ba.businessactionid -- EVO-26651
 LEFT JOIN extralinevendor ON extralinevendor.businessactionid = ba.businessactionid -- EVO-40791
