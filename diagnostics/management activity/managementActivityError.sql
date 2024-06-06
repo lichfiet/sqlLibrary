@@ -899,6 +899,7 @@ AS (
 	INNER JOIN maedata b ON b.rawdocumentid = df.dealfinalizationid
 	INNER JOIN paymentinfo p ON p.businessactionid = b.businessactionid
 	WHERE B.rawSTATUS = 2
+	    AND p.mopdescriptionsstr = ''
 	GROUP BY a.balancetofinance,
 		p.businessactionid,
 		b.businessactionid,
