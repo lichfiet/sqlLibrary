@@ -831,7 +831,7 @@ AS (
 	WHERE ba.rawSTATUS = 2
 		AND pi.invoicetype NOT IN (2, 3)
 		AND ABS(ba.rawoobamt) = ABS(pit.soldnowsubtotal)
-		AND '' != ALL (pyi.mopdescriptionsarr)
+		AND '' = ALL (pyi.mopdescriptionsarr)
 		AND pyi.mopamount = 0
 	),
 oobzerosummoppartinvoice -- optimized
