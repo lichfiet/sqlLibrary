@@ -98,10 +98,10 @@ INNER JOIN glchartofaccounts coa using (acctdeptid)
 LEFT JOIN apvendor v ON v.vendorid::TEXT = h.schedacctid
 LEFT JOIN costore s ON h.locationid = s.storeid
 WHERE coa.schedule = 2
-	AND h.isconverted = false
 	AND (
 		v.vendorid IS NULL
 		OR h.schedacctid = ''
+		OR scheddoctypeid != 2
 		)
 GROUP BY h.schedacctid,
 	coa.acctdept,
