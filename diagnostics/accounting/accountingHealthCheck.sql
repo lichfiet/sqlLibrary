@@ -179,8 +179,7 @@ AS (
 	SELECT coa.accountingid,
 		d.deptcode,
 		row_number() OVER (
-			PARTITION BY coa.accountingid,
-			coa.deptid ORDER BY avg(sequencenumber)
+			PARTITION BY coa.accountingid ORDER BY avg(sequencenumber)
 			) AS deptrank,
 		coa.deptid
 	FROM glchartofaccounts coa
@@ -198,7 +197,7 @@ SELECT 'Balance sheet account set up in non-consolidated department' AS descript
 FROM glchartofaccounts coa
 INNER JOIN deptrank dr ON dr.deptid = coa.deptid
 WHERE dr.deptrank != 1
-	AND coa.profitbalance = 1
+	AND coa.profitbalance = 2
 	AND dr.deptcode NOT ilike '%lemco%';
 --
 -- Level greater than 9 on account (Causes COA to be unable to calculate. Numbers greater than 9 can be used but it's not advised) 
