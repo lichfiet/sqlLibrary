@@ -830,8 +830,7 @@ AS (
 	INNER JOIN paymentinfo pyi ON pyi.businessactionid = ba.businessactionid
 	WHERE ba.rawSTATUS = 2
 		AND pi.invoicetype NOT IN (2, 3)
-		AND ABS(ba.rawoobamt) = ABS(pit.soldnowsubtotal)
-		AND '' = ALL (pyi.mopdescriptionsarr)
+		AND ABS(ba.rawoobamt) = ABS(pit.soldnowsubtotal) OR ABS(ba.rawoobamt) = ABS(pit.soldnowdiscount)
 		AND pyi.mopamount = 0
 	),
 oobzerosummoppartinvoice -- optimized
@@ -1177,7 +1176,7 @@ SELECT ba.documentnumber AS document_number,
 		ELSE ''
 		END || CASE 
 		WHEN oobmissingmoppartinvoice.businessactionid IS NOT NULL
-			THEN 'EVO-39505 Invoice OOB paid with Blank Method of Payment 0$ | T2 '
+			THEN 'EVO-40858 Invoice OOB paid with Blank Method of Payment 0$ | T2 '
 		ELSE ''
 		END || CASE 
 		WHEN oobmissingmopccmapping.businessactionid IS NOT NULL
@@ -1217,7 +1216,7 @@ SELECT ba.documentnumber AS document_number,
 			THEN ba.oob
 		ELSE 'N/A'
 		END AS balancestate,
-	ba.txt AS errormessage
+	ba.txt AS errormessage, pi.mopdescriptionsstr
 FROM maedata ba
 INNER JOIN paymentinfo pi on pi.businessactionid = ba.businessactionid
 LEFT JOIN erroraccropart earop ON earop.businessactionid = ba.businessactionid -- EVO-26911 RO Part with Bad Categoryid
