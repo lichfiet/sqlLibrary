@@ -1218,7 +1218,7 @@ SELECT ba.documentnumber AS document_number,
 		END AS balancestate,
 	ba.txt AS errormessage, pi.mopdescriptionsstr
 FROM maedata ba
-INNER JOIN paymentinfo pi on pi.businessactionid = ba.businessactionid
+LEFT JOIN paymentinfo pi on pi.businessactionid = ba.businessactionid
 LEFT JOIN erroraccropart earop ON earop.businessactionid = ba.businessactionid -- EVO-26911 RO Part with Bad Categoryid
 LEFT JOIN erroraccrolabor earol ON earol.businessactionid = ba.businessactionid -- EVO-18036 RO Labor with Bad Categoryid
 LEFT JOIN erroraccrolabor2 earol2 ON earol2.businessactionid = ba.businessactionid -- EVO-18036 RO Labor with Bad Categoryid
